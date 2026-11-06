@@ -423,6 +423,7 @@ CREATE TABLE VinoMaridaje
 
 /* Claves primarias */
 
+
 ALTER TABLE AnalisisCalidad ADD CONSTRAINT PK_AnalisisCalidad
 	PRIMARY KEY (id_analisis);
 
@@ -634,3 +635,5 @@ ALTER TABLE VinoMaridaje ADD CONSTRAINT FK_VinoMaridaje_Maridaje
 ALTER TABLE VinoMaridaje ADD CONSTRAINT FK_VinoMaridaje_Vino
 	FOREIGN KEY (codigo_vino) REFERENCES Vino (codigo_vino);
 
+ALTER TABLE AnalisisCalidad ADD CONSTRAINT FK_AnalisisCalidad_LoteUva
+    FOREIGN KEY (id_lote) REFERENCES LoteUva (id_lote);

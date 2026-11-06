@@ -236,3 +236,11 @@ ALTER TABLE VinoMaridaje ADD CONSTRAINT FK_VinoMaridaje_Maridaje
 ALTER TABLE VinoMaridaje DROP CONSTRAINT FK_VinoMaridaje_Vino;
 ALTER TABLE VinoMaridaje ADD CONSTRAINT FK_VinoMaridaje_Vino
     FOREIGN KEY (codigo_vino) REFERENCES Vino (codigo_vino) ON DELETE Cascade ON UPDATE Cascade;
+
+
+ALTER TABLE AnalisisCalidad DROP CONSTRAINT FK_AnalisisCalidad_LoteUva;
+
+ALTER TABLE AnalisisCalidad ADD CONSTRAINT FK_AnalisisCalidad_LoteUva
+    FOREIGN KEY (id_lote) REFERENCES LoteUva (id_lote)
+    ON DELETE RESTRICT
+    ON UPDATE CASCADE;
