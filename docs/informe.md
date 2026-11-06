@@ -26,6 +26,24 @@ Se implementaron cuatro funciones de solo lectura. Todas son `STABLE` porque con
 - `fn_antiguedad_anios` usa `CURRENT_DATE`, por eso es `STABLE` y no `IMMUTABLE`. No se utiliza dentro de un CHECK, tal como advierte el PDF.
 - Los casos de prueba de estas funciones se incorporarán a `db/tests/db_tests.sql` cuando se completen los triggers y procedimientos de la etapa.
 
+## Procedimientos transaccionales (`004_procedimientos.sql`)
+
+| Procedimiento | Regla | Propósito | Parámetros | Efecto |
+|---|---|---|---|---|
+| `sp_procesar_ingreso` | RN-10 | Procesa un ingreso terminado y lo pasa a procesado | `p_id_ingreso integer` | Suma botellas a `StockDeposito` |
+| `sp_procesar_transferencia` | RN-11 | Procesa una transferencia terminada | `p_nro_transferencia integer` | Descuenta del depósito y suma a `StockSala` |
+
+### Decisiones de diseño
+
+- Se bloquean las filas del documento, sus renglones y las filas de stock con `FOR UPDATE`.
+- El orden de bloqueo es documento → renglones → stock del depósito → stock de la sala, ordenando por `codigo_vino` para evitar deadlocks.
+- Los ingresos crean la fila de `StockDeposito` si no existe.
+- Las transferencias rechazan el procesamiento si falta la fila de stock del depósito o si la cantidad es insuficiente, cubriendo el caso advertido en el Anexo A.6.
+- Los procedimientos no hacen `COMMIT` ni `ROLLBACK`: la atomicidad queda garantizada por la transacción del llamador.
+- Solo se permite la transición `terminado → procesado`; no se reprocesa un documento.
+- Los triggers de estados, bloqueo de renglones y fecha de confección se implementan en `005_triggers.sql`.
+- Los casos de prueba de los procedimientos se incorporarán a `db/tests/db_tests.sql` junto con el resto de las pruebas de la etapa.
+
 # Etapa 3
 
 # Etapa 4
