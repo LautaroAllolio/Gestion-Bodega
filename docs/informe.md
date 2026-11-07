@@ -71,6 +71,55 @@ Se implementaron cuatro funciones de solo lectura. Todas son `STABLE` porque con
 
 # Etapa 3
 
+## Catálogos reales (Anexo B)
+
+El paso 1 de la etapa pide cargar los catálogos reales desde archivos CSV, sin generarlos al azar. Los archivos se guardan en `db/seed/` con codificación UTF-8, encabezado, coma como separador e identificadores explícitos y determinísticos, de modo que dos ejecuciones del futuro script de carga produzcan los mismos datos.
+
+| Archivo | Tabla destino | Filas | Columnas | Fuente |
+|---|---|---|---|---|
+| `cepas.csv` | `Cepa` | 12 | `id_cepa`, `nombre`, `tipo` | Anexo B.1 |
+| `maridajes.csv` | `Maridaje` | 8 | `id_maridaje`, `nombre`, `temperatura_servicio` | Anexo B.2 |
+| `tipos_vino.csv` | — (catálogo de referencia) | 4 | `tipo` | Anexo B.4 |
+| `departamentos.csv` | `Departamento` | 18 | `id_departamento`, `nombre`, `provincia` | Anexo B.3 |
+| `localidades.csv` | `Localidad` | 18 | `id_localidad`, `nombre`, `provincia`, `codigo_postal`, `cuit_encargado` | Anexo B.3 (capitales) |
+
+### Contenido de los catálogos
+
+- **Cepas (12):** 7 tintas (Malbec, Cabernet Sauvignon, Merlot, Syrah, Bonarda, Tempranillo y Pinot Noir) y 5 blancas (Chardonnay, Sauvignon Blanc, Torrontés, Chenin Blanc y Semillón).
+- **Maridajes (8):** Carnes rojas (17 °C), Quesos duros (16 °C), Pastas con salsa roja (16 °C), Carnes blancas (12 °C), Quesos blandos (10 °C), Pescados y mariscos (8 °C), Entradas y fiambres (10 °C) y Postres (8 °C).
+- **Tipos de vino (4):** Tinto, Blanco, Rosado y Espumante, con la misma grafía que exige el `CHECK` de `Vino.tipo`.
+- **Departamentos y localidades (18):** se tomó una localidad cabecera por cada departamento del Anexo B.3.
+
+| ID | Departamento | Localidad cabecera | Código postal |
+|---|---|---|---|
+| 1 | San Rafael | San Rafael | 5600 |
+| 2 | General Alvear | General Alvear | 5620 |
+| 3 | Malargüe | Malargüe | 5613 |
+| 4 | Luján de Cuyo | Luján de Cuyo | 5507 |
+| 5 | Maipú | Maipú | 5515 |
+| 6 | Tupungato | Tupungato | 5561 |
+| 7 | Tunuyán | Tunuyán | 5560 |
+| 8 | San Carlos | Villa San Carlos | 5569 |
+| 9 | Lavalle | Villa Tulumaya | 5533 |
+| 10 | Rivadavia | Rivadavia | 5577 |
+| 11 | Junín | Junín | 5573 |
+| 12 | San Martín | San Martín | 5570 |
+| 13 | Santa Rosa | Santa Rosa | 5596 |
+| 14 | La Paz | La Paz | 5590 |
+| 15 | Godoy Cruz | Godoy Cruz | 5501 |
+| 16 | Guaymallén | Villa Nueva | 5521 |
+| 17 | Las Heras | Las Heras | 5539 |
+| 18 | Capital | Mendoza | 5500 |
+
+### Decisiones de diseño
+
+- Se usan IDs enteros explícitos en los CSV en lugar de dejar que la base los genere: así las claves foráneas de las etapas posteriores son predecibles y la carga es reproducible con semilla fija.
+- `tipos_vino.csv` es un catálogo de referencia y no tiene tabla destino. El esquema no define una tabla `TipoVino`; la fuente de verdad es el `CHECK` de `Vino.tipo`, y el futuro generador de vinos toma de este CSV los cuatro valores válidos.
+- `Localidad` no tiene clave foránea hacia `Departamento` en el esquema de la etapa 1. Los departamentos se usan para las fincas y como referencia para definir las capitales departamentales; por eso `localidades.csv` no incluye una columna `departamento` y la correspondencia queda documentada en la tabla anterior.
+- `cuit_encargado` se carga vacío (NULL) porque referencia a `Empleado` y existe una dependencia circular `Localidad → Empleado → SalaDeVenta → Localidad`. Se completará recién después de cargar salas y empleados.
+- Los acentos se conservan en UTF-8 (Malargüe, Luján de Cuyo, Guaymallén, Torrontés, Semillón, Junín, Maipú). Los valores de `tipo` de cepa y de vino respetan las mayúsculas y la ortografía de los `CHECK` del esquema.
+- Todos los datos respetan las restricciones existentes: tipo de cepa en `{Tinta, Blanca}`, temperatura de maridaje entre 5 y 25, y nombres de localidad únicos dentro de la provincia.
+
 # Etapa 4
 
 # Etapa 5
