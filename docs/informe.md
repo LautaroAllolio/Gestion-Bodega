@@ -120,6 +120,60 @@ El paso 1 de la etapa pide cargar los catálogos reales desde archivos CSV, sin 
 - Los acentos se conservan en UTF-8 (Malargüe, Luján de Cuyo, Guaymallén, Torrontés, Semillón, Junín, Maipú). Los valores de `tipo` de cepa y de vino respetan las mayúsculas y la ortografía de los `CHECK` del esquema.
 - Todos los datos respetan las restricciones existentes: tipo de cepa en `{Tinta, Blanca}`, temperatura de maridaje entre 5 y 25, y nombres de localidad únicos dentro de la provincia.
 
+## Script de carga masiva (`db/seed/load.py`)
+
+El segundo paso de la etapa pide un script reproducible que genere y cargue el volumen de datos. Se implementó en Python 3 con `psycopg` 3, `Faker` (locale `es_AR`) y `random`, con semilla fija `20261101` y fecha base `2026-11-01` (ambas configurables). Las dependencias están en `db/seed/requirements.txt` y el procedimiento completo en `db/seed/README.md`.
+
+### Ejecución
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r db/seed/requirements.txt
+$env:PGPASSWORD = "<password>"
+.\.venv\Scripts\python.exe db/seed/load.py --dry-run --scale 0.01
+.\.venv\Scripts\python.exe db/seed/load.py --reset --scale 1.0
+```
+
+Opciones: `--dsn`, `--reset`, `--scale`, `--seed`, `--base-date`, `--dry-run` y `--report`. Sin `--reset`, el script aborta si la base ya tiene datos.
+
+### Volúmenes cargados (escala 1.0)
+
+| Tabla | Filas | Tabla | Filas |
+|---|---:|---|---:|
+| `cepa` | 12 | `maridaje` | 8 |
+| `departamento` | 18 | `localidad` | 18 |
+| `bodega` | 20 | `transportista` | 18 |
+| `depositocentral` | 1 | `saladeventa` | 20 |
+| `empleado` | 120 | `transportistalocalidad` | 49 |
+| `finca` | 30 | `parcela` | 900 |
+| `loteuva` | 4000 | `analisiscalidad` | 8029 |
+| `cliente` | 20000 | `socioclub` | 14016 |
+| `distribuidor` | 3946 | `exportador` | 2038 |
+| `permisoexportacion` | 4558 | `vino` | 600 |
+| `vinocepa` | 880 | `vinomaridaje` | 903 |
+| `stockdeposito` | 600 | `ingreso` | 2000 |
+| `detalleingreso` | 7125 | `transferencia` | 3000 |
+| `detalletransferencia` | 9277 | `stocksala` | 3000 |
+| `comprobanteventa` | 150000 | `detalleventa` | 510382 |
+| `auditoriaprecio` | 1 | **Total** | **745569** |
+
+`vino` se fija en 600 en lugar de 800 para que `vinocepa` y `vinomaridaje` queden dentro del rango recomendado de 300 a 1000 filas.
+
+### Decisiones de carga
+
+- **Reproducibilidad:** un `random.Random` independiente por sección derivado de `seed:seccion`, `Faker.seed(seed)` y ninguna dependencia de `date.today()` ni `CURRENT_TIMESTAMP`. La generación se probó dos veces con la misma semilla y produjo datasets idénticos.
+- **Validación previa:** antes de conectarse, el script verifica claves primarias únicas, referencias existentes, composición de vinos, subtotales de renglones, totales de comprobantes, stock no negativo y coherencia del descuento por tipo de cliente.
+- **Orden topológico:** catálogos, bodegas, transportistas y depósito; localidades; salas y empleados; fincas, parcelas, lotes y análisis; clientes y subtipos; vinos, composición, maridajes y stock; ingresos y transferencias; ventas y auditoría.
+- **Dependencia circular:** `Localidad → Empleado → SalaDeVenta → Localidad` se resuelve cargando `cuit_encargado` en `NULL` y actualizándolo después de cargar `Empleado`.
+- **Triggers:** dentro de una única transacción se deshabilitan los triggers de usuario de `DetalleVenta`, `Transferencia`, `DetalleIngreso`, `DetalleTransferencia`, `Vino` y `VinoCepa`, se carga con `COPY`, se habilitan de nuevo y se ejecutan controles. Un fallo revierte todo, incluidos los `DISABLE/ENABLE`.
+- **Totales:** los importes de `ComprobanteVenta` se calculan en Python con la misma fórmula que los triggers de la etapa 2 (subtotal bruto, descuento en monto y total neto).
+- **Secuencias:** después de insertar IDs explícitos se ejecuta `setval` para las 14 tablas con `serial`, y `ANALYZE` al final.
+- **Controles:** el script falla si hay vinos cuya composición no suma 100, comprobantes con totales inconsistentes o sin renglones, stock negativo, renglones huérfanos o referencias faltantes en las relaciones principales.
+
+### Resultado de la prueba
+
+Sobre `bodega_seed` con las migraciones `001` a `007`, la carga completa terminó en 20,5 segundos, con 745.569 filas y los 14 controles en cero. También se verificó que todos los triggers quedaron habilitados, que las 18 localidades tienen encargado, que las 14 secuencias quedaron por encima del máximo ID y que los 600 vinos tienen composición.
+
 # Etapa 4
 
 # Etapa 5
