@@ -216,6 +216,33 @@ Sobre `bodega_seed` con las migraciones `001` a `007`, la carga completa termin�
 
 El benchmark completo se ejecutó sin alterar la base: se verificaron los conteos de `DetalleVenta`, `ComprobanteVenta`, `Vino` y `Cliente`, y que no quedaran triggers deshabilitados. La carga normal se probó además en una base temporal `bodega_smoke` con `--scale 0.01` para `copy` y `executemany`, con los 15 controles en cero.
 
+### Verificación final y volcado
+
+Se agregó `db/tests/verificacion_etapa3.sql`, un script independiente del cargador que ejecuta 22 controles y falla si alguno devuelve un valor distinto de cero:
+
+```powershell
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed `
+  -v ON_ERROR_STOP=1 -f db/tests/verificacion_etapa3.sql
+```
+
+| Categoría | Controles | Resultado |
+|---|---:|---:|
+| Stock negativo en depósito o sala | 2 | 0 |
+| Coherencia de importes y composición | 6 | 0 |
+| Huérfanos en relaciones principales | 11 | 0 |
+| Integridad global (FK, triggers, encargados) | 3 | 0 |
+
+Los 22 controles dieron cero. El volcado se generó con `pg_dump` 18.3 en formato SQL plano, sin propietarios ni privilegios, y se comprimió con gzip:
+
+```text
+db/dump_completo.sql.gz
+10.106.395 bytes
+SHA-256 45cf607865aa4aa331e0cca0fdc7cbcbf02e384ca3d193fea78081d3fdc949ff
+31 bloques COPY · 745.569 filas
+```
+
+Se probó la restauración en una base temporal `bodega_restore`: las 31 tablas y las 745.569 filas coincidieron con `bodega_seed`, y los 22 controles volvieron a dar cero. Luego se eliminó la base temporal. Al usar `--no-owner --no-privileges`, el volcado no depende de los roles del clúster; para recrearlos se ejecuta `db/migrations/007_roles.sql` después de restaurar.
+
 # Etapa 4
 
 # Etapa 5
