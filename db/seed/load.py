@@ -16,12 +16,13 @@ from pathlib import Path
 try:
     from faker import Faker
 except ImportError as exc:
-    raise SystemExit("Falta Faker. InstalÃ¡ db/seed/requirements.txt") from exc
+    raise SystemExit("Falta Faker. Instalá db/seed/requirements.txt") from exc
 
 BASE_DIR = Path(__file__).resolve().parent
 SEED = 20261101
 BASE_DATE = date(2026, 11, 1)
 CENT = Decimal("0.01")
+STRATEGIES = ("copy", "executemany", "individual")
 
 TABLES: dict[str, tuple[str, ...]] = {
     "cepa": ("id_cepa", "nombre", "tipo"),
@@ -163,7 +164,7 @@ TRIGGER_TABLES = ("detalleventa", "transferencia", "detalleingreso", "detalletra
 ESTADOS = ("en_confeccion", "terminado", "procesado")
 DIAS_CIERRE = ("Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado", "Domingo", "Ninguno")
 TIPOS_CLIENTE = ("Socio", "Distribuidor", "Exportador")
-PAISES = ("Brasil", "Estados Unidos", "Reino Unido", "China", "Chile", "Paraguay", "Uruguay", "CanadÃ¡", "Francia", "Italia", "JapÃ³n", "MÃ©xico")
+PAISES = ("Brasil", "Estados Unidos", "Reino Unido", "China", "Chile", "Paraguay", "Uruguay", "Canadá", "Francia", "Italia", "Japón", "México")
 
 
 def money(value) -> Decimal:
@@ -275,7 +276,7 @@ def generate(seed: int, base_date: date, scale: float) -> tuple[dict[str, list[t
             str(rng_transportista.randint(1, 5000)),
         ))
 
-    data["depositocentral"].append((1, "DepÃ³sito Central"))
+    data["depositocentral"].append((1, "Depósito Central"))
 
     rng_sala = rng_for(seed, "sala")
     for i in range(1, n_salas + 1):
@@ -631,7 +632,7 @@ def validate(data: dict[str, list[tuple]], encargados: list[tuple[str, int]]) ->
         sumas[codigo] += porcentaje
     for codigo, _nombre, _tipo, _anada, _pres, _grad, _precio, _cuit in data["vino"]:
         if sumas[codigo] != Decimal("100.00"):
-            errors.append(f"{codigo}: composiciÃ³n suma {sumas[codigo]}")
+            errors.append(f"{codigo}: composición suma {sumas[codigo]}")
             break
         if not any(row[0] == codigo for row in data["vinomaridaje"]):
             errors.append(f"{codigo}: sin maridaje")
@@ -648,7 +649,7 @@ def validate(data: dict[str, list[tuple]], encargados: list[tuple[str, int]]) ->
             errors.append("detalleventa: subtotal inconsistente")
             break
         if botellas <= 0 or precio <= 0:
-            errors.append("detalleventa: cantidad o precio invÃ¡lido")
+            errors.append("detalleventa: cantidad o precio inválido")
             break
 
     for row in data["cliente"]:
@@ -661,11 +662,11 @@ def validate(data: dict[str, list[tuple]], encargados: list[tuple[str, int]]) ->
 
     vinos_unicos = {(row[1], row[3], row[4]) for row in data["vino"]}
     if len(vinos_unicos) != len(data["vino"]):
-        errors.append("vino: (nombre, aÃ±ada, presentaciÃ³n) duplicado")
+        errors.append("vino: (nombre, añada, presentación) duplicado")
 
     lotes_unicos = {(row[6], row[5], row[7]) for row in data["loteuva"]}
     if len(lotes_unicos) != len(data["loteuva"]):
-        errors.append("loteuva: cosecha duplicada por parcela y campaÃ±a")
+        errors.append("loteuva: cosecha duplicada por parcela y campaña")
 
     totales: dict[int, list[Decimal]] = defaultdict(lambda: [Decimal("0.00"), Decimal("0.00")])
     for row in data["detalleventa"]:
@@ -690,7 +691,7 @@ def connect(args):
     try:
         import psycopg
     except ImportError as exc:
-        raise SystemExit("Falta psycopg. InstalÃ¡ db/seed/requirements.txt") from exc
+        raise SystemExit("Falta psycopg. Instalá db/seed/requirements.txt") from exc
 
     dsn = args.dsn or os.getenv("DATABASE_URL")
     if dsn:
@@ -719,17 +720,42 @@ def copy_rows(cursor, table: str, rows: list[tuple]) -> None:
             copy.write_row(row)
 
 
+def insert_statement(table: str):
+    from psycopg import sql
+
+    columns = TABLES[table]
+    return sql.SQL("INSERT INTO {} ({}) VALUES ({})").format(
+        sql.Identifier(table),
+        sql.SQL(", ").join(sql.Identifier(column) for column in columns),
+        sql.SQL(", ").join(sql.Placeholder() for _ in columns),
+    )
+
+
+def insert_rows(cursor, table: str, rows: list[tuple], strategy: str) -> None:
+    if not rows:
+        return
+    if strategy == "copy":
+        copy_rows(cursor, table, rows)
+        return
+    statement = insert_statement(table)
+    if strategy == "executemany":
+        cursor.executemany(statement, rows)
+        return
+    if strategy == "individual":
+        for row in rows:
+            cursor.execute(statement, row)
+        return
+    raise ValueError(f"Estrategia desconocida: {strategy}")
+
+
 def table_is_empty(cursor) -> bool:
     cursor.execute("SELECT (SELECT count(*) FROM cepa) + (SELECT count(*) FROM vino) + (SELECT count(*) FROM comprobanteventa)")
     return cursor.fetchone()[0] == 0
 
 
-def truncate_all(cursor) -> None:
-    cursor.execute(
-        "TRUNCATE TABLE "
-        + ", ".join(TABLES)
-        + " RESTART IDENTITY CASCADE"
-    )
+def truncate_all(cursor, restart_identity: bool = True) -> None:
+    identity = " RESTART IDENTITY" if restart_identity else ""
+    cursor.execute("TRUNCATE TABLE " + ", ".join(TABLES) + identity + " CASCADE")
 
 
 def set_disabled_triggers(cursor, disabled: bool) -> None:
@@ -753,6 +779,15 @@ def set_sequences(cursor) -> None:
 
 def run_controls(cursor) -> dict[str, int]:
     controls: dict[str, int] = {}
+    cursor.execute(
+        "SELECT count(*) FROM pg_trigger t"
+        " JOIN pg_class c ON c.oid = t.tgrelid"
+        " JOIN pg_namespace n ON n.oid = c.relnamespace"
+        " WHERE NOT t.tgisinternal AND t.tgenabled = 'D'"
+        "   AND n.nspname = current_schema()"
+    )
+    controls["triggers_usuario_deshabilitados"] = cursor.fetchone()[0]
+
     cursor.execute(
         "SELECT count(*) FROM ("
         " SELECT v.codigo_vino FROM vino v"
@@ -806,53 +841,131 @@ def run_controls(cursor) -> dict[str, int]:
     return controls
 
 
-def load_dataset(database, data: dict[str, list[tuple]], encargados: list[tuple[str, int]], args) -> tuple[dict[str, int], dict[str, float], dict[str, int]]:
+def load_dataset(
+    database,
+    data: dict[str, list[tuple]],
+    encargados: list[tuple[str, int]],
+    args,
+    *,
+    strategy: str | None = None,
+    benchmark: bool = False,
+) -> tuple[dict[str, int], dict[str, float], dict[str, int]]:
+    strategy = strategy or args.strategy
     counts: dict[str, int] = {}
     timings: dict[str, float] = {}
     controls: dict[str, int] = {}
-    with database.transaction():
+    with database.transaction(force_rollback=benchmark):
         with database.cursor() as cursor:
             cursor.execute("SET LOCAL synchronous_commit = off")
             set_disabled_triggers(cursor, True)
-            if args.reset:
-                truncate_all(cursor)
+            if benchmark or args.reset:
+                truncate_all(cursor, restart_identity=not benchmark)
             elif not table_is_empty(cursor):
-                raise SystemExit("La base ya tiene datos. UsÃ¡ --reset para truncar antes de cargar.")
+                raise SystemExit("La base ya tiene datos. Usá --reset para truncar antes de cargar.")
 
             for table in LOAD_ORDER:
                 start = time.perf_counter()
-                copy_rows(cursor, table, data[table])
+                insert_rows(cursor, table, data[table], strategy)
                 timings[table] = round(time.perf_counter() - start, 3)
                 counts[table] = len(data[table])
 
             update_encargados(cursor, encargados)
-            set_sequences(cursor)
-            cursor.execute("ANALYZE")
+            if not benchmark:
+                set_sequences(cursor)
+                cursor.execute("ANALYZE")
             set_disabled_triggers(cursor, False)
             controls = run_controls(cursor)
 
     return counts, timings, controls
 
 
+def benchmark(database, data: dict[str, list[tuple]], encargados: list[tuple[str, int]], args) -> dict[str, dict]:
+    results: dict[str, dict] = {}
+    for strategy in STRATEGIES:
+        print(f"Benchmark: {strategy} ...", flush=True)
+        started = time.perf_counter()
+        try:
+            counts, timings, controls = load_dataset(
+                database, data, encargados, args, strategy=strategy, benchmark=True
+            )
+        except Exception as exc:
+            results[strategy] = {"error": str(exc)}
+            print(f"  ERROR: {exc}", file=sys.stderr)
+            continue
+        wall_seconds = round(time.perf_counter() - started, 3)
+        total_rows = sum(counts.values())
+        insert_seconds = round(sum(timings.values()), 3)
+        results[strategy] = {
+            "rows": counts,
+            "timings": timings,
+            "controls": controls,
+            "total_rows": total_rows,
+            "insert_seconds": insert_seconds,
+            "wall_seconds": wall_seconds,
+            "rows_per_second": round(total_rows / insert_seconds, 1) if insert_seconds else None,
+        }
+        print(f"  {total_rows} filas, inserción {insert_seconds:.3f}s, total {wall_seconds:.3f}s", flush=True)
+
+    baseline = results.get("individual", {}).get("insert_seconds")
+    if baseline:
+        for result in results.values():
+            if "insert_seconds" in result:
+                result["speedup_vs_individual"] = round(baseline / result["insert_seconds"], 2)
+    return results
+
+
+def print_benchmark(results: dict[str, dict]) -> None:
+    print("\nComparación de estrategias:")
+    print(f"  {'estrategia':12s} {'filas':>9s} {'inserción':>11s} {'total':>9s} {'filas/s':>12s} {'vs individual':>14s}")
+    for strategy in STRATEGIES:
+        result = results[strategy]
+        if "error" in result:
+            print(f"  {strategy:12s} ERROR: {result['error']}")
+            continue
+        speedup = result.get("speedup_vs_individual")
+        speedup_text = f"{speedup:.2f}x" if speedup is not None else "-"
+        rows_per_second = result.get("rows_per_second")
+        rps_text = f"{rows_per_second:.1f}" if rows_per_second is not None else "-"
+        print(
+            f"  {strategy:12s} {result['total_rows']:>9d}"
+            f" {result['insert_seconds']:>10.3f}s {result['wall_seconds']:>8.3f}s"
+            f" {rps_text:>12s} {speedup_text:>14s}"
+        )
+        if any(result["controls"].values()):
+            failed = {name: value for name, value in result["controls"].items() if value}
+            print(f"    controles con diferencias: {failed}")
+        else:
+            print("    controles: OK")
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Carga masiva reproducible de Bodegas del Atuel")
-    parser.add_argument("--dsn", help="Cadena de conexiÃ³n; si falta se usan DATABASE_URL o PG*")
+    parser.add_argument("--dsn", help="Cadena de conexión; si falta se usan DATABASE_URL o PG*")
     parser.add_argument("--reset", action="store_true", help="Trunca todas las tablas antes de cargar")
-    parser.add_argument("--scale", type=float, default=1.0, help="Factor de escala de los volÃºmenes (default 1.0)")
+    parser.add_argument("--scale", type=float, default=1.0, help="Factor de escala de los volúmenes (default 1.0)")
+    parser.add_argument("--strategy", choices=STRATEGIES, default="copy", help="Estrategia de inserción (default copy)")
     parser.add_argument("--seed", type=int, default=SEED, help=f"Semilla (default {SEED})")
     parser.add_argument("--base-date", type=date.fromisoformat, default=BASE_DATE, help=f"Fecha base ISO (default {BASE_DATE})")
     parser.add_argument("--dry-run", action="store_true", help="Genera y valida sin conectarse a PostgreSQL")
     parser.add_argument("--report", type=Path, help="Escribe un reporte JSON con conteos, tiempos y controles")
+    parser.add_argument("--benchmark", action="store_true", help="Compara copy, executemany e individual con rollback")
+    parser.add_argument("--benchmark-scale", type=float, default=1.0, help="Escala del benchmark (default 1.0)")
+    parser.add_argument("--benchmark-report", type=Path, help="Escribe el reporte JSON del benchmark")
     args = parser.parse_args(argv)
     if args.scale <= 0:
         parser.error("--scale debe ser mayor que 0")
+    if args.benchmark_scale <= 0:
+        parser.error("--benchmark-scale debe ser mayor que 0")
+    if args.benchmark and args.dry_run:
+        parser.error("--benchmark y --dry-run no se pueden combinar")
     return args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    scale = args.benchmark_scale if args.benchmark else args.scale
     started = time.perf_counter()
-    data, encargados, _tipos = generate(args.seed, args.base_date, args.scale)
+    data, encargados, _tipos = generate(args.seed, args.base_date, scale)
     generated_at = time.perf_counter()
     errors = validate(data, encargados)
     counts = {table: len(rows) for table, rows in data.items()}
@@ -861,7 +974,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    print(f"GeneraciÃ³n OK en {generated_at - started:.2f}s ({sum(counts.values())} filas)")
+    print(f"Generación OK en {generated_at - started:.2f}s ({sum(counts.values())} filas, escala {scale})")
     if args.dry_run:
         for table in LOAD_ORDER:
             print(f"  {table:24s} {counts[table]:>9d}")
@@ -870,9 +983,29 @@ def main(argv: list[str] | None = None) -> int:
 
     database = connect(args)
     try:
-        counts, timings, controls = load_dataset(database, data, encargados, args)
+        if args.benchmark:
+            results = benchmark(database, data, encargados, args)
+        else:
+            counts, timings, controls = load_dataset(database, data, encargados, args)
     finally:
         database.close()
+
+    if args.benchmark:
+        print_benchmark(results)
+        report = {
+            "seed": args.seed,
+            "base_date": args.base_date.isoformat(),
+            "scale": scale,
+            "strategies": results,
+            "validation_errors": errors,
+        }
+        if args.benchmark_report:
+            args.benchmark_report.parent.mkdir(parents=True, exist_ok=True)
+            args.benchmark_report.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+            print(f"Reporte de benchmark escrito en {args.benchmark_report}")
+        valid = all("error" not in result and not any(result["controls"].values()) for result in results.values())
+        return 0 if valid else 1
+
     load_time = time.perf_counter() - generated_at
 
     print(f"Carga OK en {load_time:.2f}s")
@@ -886,6 +1019,7 @@ def main(argv: list[str] | None = None) -> int:
         "seed": args.seed,
         "base_date": args.base_date.isoformat(),
         "scale": args.scale,
+        "strategy": args.strategy,
         "counts": counts,
         "timings": timings,
         "controls": controls,

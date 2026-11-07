@@ -134,7 +134,14 @@ $env:PGPASSWORD = "<password>"
 .\.venv\Scripts\python.exe db/seed/load.py --reset --scale 1.0
 ```
 
-Opciones: `--dsn`, `--reset`, `--scale`, `--seed`, `--base-date`, `--dry-run` y `--report`. Sin `--reset`, el script aborta si la base ya tiene datos.
+Opciones: `--dsn`, `--reset`, `--scale`, `--strategy`, `--seed`, `--base-date`, `--dry-run`, `--report`, `--benchmark`, `--benchmark-scale` y `--benchmark-report`. Sin `--reset`, el script aborta si la base ya tiene datos.
+
+Para comparar estrategias sin modificar la base:
+
+```powershell
+.\.venv\Scripts\python.exe db/seed/load.py --benchmark --benchmark-scale 1.0 `
+  --benchmark-report db/seed/benchmark_report.json
+```
 
 ### Volúmenes cargados (escala 1.0)
 
@@ -165,14 +172,49 @@ Opciones: `--dsn`, `--reset`, `--scale`, `--seed`, `--base-date`, `--dry-run` y 
 - **Validación previa:** antes de conectarse, el script verifica claves primarias únicas, referencias existentes, composición de vinos, subtotales de renglones, totales de comprobantes, stock no negativo y coherencia del descuento por tipo de cliente.
 - **Orden topológico:** catálogos, bodegas, transportistas y depósito; localidades; salas y empleados; fincas, parcelas, lotes y análisis; clientes y subtipos; vinos, composición, maridajes y stock; ingresos y transferencias; ventas y auditoría.
 - **Dependencia circular:** `Localidad → Empleado → SalaDeVenta → Localidad` se resuelve cargando `cuit_encargado` en `NULL` y actualizándolo después de cargar `Empleado`.
-- **Triggers:** dentro de una única transacción se deshabilitan los triggers de usuario de `DetalleVenta`, `Transferencia`, `DetalleIngreso`, `DetalleTransferencia`, `Vino` y `VinoCepa`, se carga con `COPY`, se habilitan de nuevo y se ejecutan controles. Un fallo revierte todo, incluidos los `DISABLE/ENABLE`.
+- **Estrategia eficiente:** la carga usa `COPY` por defecto; `--strategy` permite probar `executemany` e `individual`. Las tres variantes comparten generación, orden topológico y controles.
+- **Triggers:** dentro de una única transacción se deshabilitan los triggers de usuario de `DetalleVenta`, `Transferencia`, `DetalleIngreso`, `DetalleTransferencia`, `Vino` y `VinoCepa`, se carga, se habilitan de nuevo y se ejecutan controles. Un fallo revierte todo, incluidos los `DISABLE/ENABLE`.
 - **Totales:** los importes de `ComprobanteVenta` se calculan en Python con la misma fórmula que los triggers de la etapa 2 (subtotal bruto, descuento en monto y total neto).
 - **Secuencias:** después de insertar IDs explícitos se ejecuta `setval` para las 14 tablas con `serial`, y `ANALYZE` al final.
-- **Controles:** el script falla si hay vinos cuya composición no suma 100, comprobantes con totales inconsistentes o sin renglones, stock negativo, renglones huérfanos o referencias faltantes en las relaciones principales.
+- **Controles:** el script falla si quedan triggers de usuario deshabilitados, si hay vinos cuya composición no suma 100, comprobantes con totales inconsistentes o sin renglones, stock negativo, renglones huérfanos o referencias faltantes en las relaciones principales.
+
+### Eficiencia de carga
+
+Se agregó el modo `--benchmark`, que genera un único dataset y lo inserta con `copy`, `executemany` e `individual` dentro de transacciones con `force_rollback=True`. Así se comparan tiempos sin alterar datos, secuencias ni triggers. Las tres corridas usan las mismas 745.569 filas, con triggers deshabilitados y claves foráneas activas.
+
+| Estrategia | Inserción | Tiempo total | Filas/s | vs. individual |
+|---|---:|---:|---:|---:|
+| `copy` | 20,481 s | 21,975 s | 36.403,0 | 10,06x |
+| `executemany` | 40,831 s | 42,412 s | 18.259,9 | 5,05x |
+| `individual` | 206,065 s | 207,406 s | 3.618,1 | 1,00x |
+
+La generación previa tardó 7,87 s y los 15 controles dieron cero en las tres estrategias. `COPY` resultó 10,06 veces más rápido que la inserción fila por fila y 2 veces más rápido que el lote con `executemany`; por eso es la estrategia por defecto. `psycopg` 3 no expone `execute_values` de `psycopg2`, así que la alternativa por lotes se implementó con `executemany`. El detalle por tabla quedó en `db/seed/benchmark_report.json`.
+
+### Manejo de triggers en la carga histórica
+
+| Tabla | Triggers deshabilitados | Motivo |
+|---|---|---|
+| `DetalleVenta` | `trg_renglon_1_completar`, `trg_renglon_2_valida_stock`, `trg_renglon_3_stock_y_totales` | Las ventas históricas no deben descontar stock actual ni recalcular totales ya calculados. |
+| `Transferencia` | `trg_transferencia_estado`, `trg_transferencia_fecha` | La fecha histórica no debe reemplazarse por `CURRENT_DATE`; los documentos se cargan terminados. |
+| `DetalleIngreso` | `trg_detalle_ingreso_bloqueo` | El ingreso se carga cerrado y el trigger rechazaría sus renglones. |
+| `DetalleTransferencia` | `trg_detalle_transferencia_bloqueo` | La transferencia se carga cerrada y el trigger rechazaría sus renglones. |
+| `Vino` | `trg_vino_auditoria_precio`, `trg_vino_suma_100` | Los precios son históricos; la composición se valida al final. |
+| `VinoCepa` | `trg_vinocepa_suma_100` | La composición se controla después de cargar todas las cepas. |
+
+`trg_ingreso_estado` no se desactiva porque es `BEFORE UPDATE OF estado` y la carga solo hace `INSERT`. Las claves foráneas siguen activas porque son triggers internos y `DISABLE TRIGGER USER` no las desactiva.
+
+Riesgos asumidos y mitigaciones:
+
+- **Reglas suspendidas:** el `ALTER TABLE ... DISABLE TRIGGER USER` toma un lock exclusivo y la carga corre en una única transacción, en un entorno controlado y sin sesiones concurrentes.
+- **Olvido de rehabilitar:** los `DISABLE` y `ENABLE` están en la misma transacción; cualquier error revierte ambos.
+- **Datos inconsistentes:** se validan invariantes en Python y se ejecutan 15 controles SQL antes del `COMMIT`.
+- **Referencias:** las FK no se desactivan, por lo que se validan fila por fila durante toda la carga.
 
 ### Resultado de la prueba
 
-Sobre `bodega_seed` con las migraciones `001` a `007`, la carga completa terminó en 20,5 segundos, con 745.569 filas y los 14 controles en cero. También se verificó que todos los triggers quedaron habilitados, que las 18 localidades tienen encargado, que las 14 secuencias quedaron por encima del máximo ID y que los 600 vinos tienen composición.
+Sobre `bodega_seed` con las migraciones `001` a `007`, la carga completa terminó en 20,5 segundos, con 745.569 filas y los 15 controles en cero. También se verificó que todos los triggers quedaron habilitados, que las 18 localidades tienen encargado, que las 14 secuencias quedaron por encima del máximo ID y que los 600 vinos tienen composición.
+
+El benchmark completo se ejecutó sin alterar la base: se verificaron los conteos de `DetalleVenta`, `ComprobanteVenta`, `Vino` y `Cliente`, y que no quedaran triggers deshabilitados. La carga normal se probó además en una base temporal `bodega_smoke` con `--scale 0.01` para `copy` y `executemany`, con los 15 controles en cero.
 
 # Etapa 4
 
