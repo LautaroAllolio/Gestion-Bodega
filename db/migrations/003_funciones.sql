@@ -1,7 +1,7 @@
 /* ------------------------------------------------------------ */
 /* 003_funciones.sql - TPI Bases de Datos, Bodegas del Atuel     */
 /* Funciones de cálculo y consulta - Etapa 2                     */
-/* Ejecutar después de 002_contraints.sql (PostgreSQL 14+)       */
+/* Ejecutar después de 002_constraints.sql (PostgreSQL 14+)      */
 /* ------------------------------------------------------------ */
 
 -- RN-08: total del comprobante = suma de sus renglones con descuento.
@@ -53,19 +53,19 @@ COMMENT ON FUNCTION fn_stock_sala(integer, character varying)
     IS 'RN-09: stock de un vino en una sala; 0 si no existe. STABLE.';
 
 
--- RN-06: descuento según el tipo de cliente.
+-- RN-06: descuento registrado para el cliente.
 -- Parámetros: p_id_cliente integer.
--- Retorna: numeric(5,2): 10, 20 o 30. Volatilidad: STABLE.
+-- Retorna: numeric(5,2) según Cliente.descuento_porcentaje. Volatilidad: STABLE.
 CREATE OR REPLACE FUNCTION fn_descuento_cliente(p_id_cliente integer)
 RETURNS numeric(5,2)
 LANGUAGE plpgsql
 STABLE
 AS $$
 DECLARE
-    v_tipo varchar(50);
+    v_descuento numeric(5,2);
 BEGIN
-    SELECT c.tipo_cliente
-      INTO v_tipo
+    SELECT c.descuento_porcentaje
+      INTO v_descuento
       FROM Cliente c
      WHERE c.id_cliente = p_id_cliente;
 
@@ -73,16 +73,12 @@ BEGIN
         RAISE EXCEPTION 'No existe el cliente % (RN-06)', p_id_cliente;
     END IF;
 
-    RETURN CASE v_tipo
-               WHEN 'Socio' THEN 10.00
-               WHEN 'Distribuidor' THEN 20.00
-               WHEN 'Exportador' THEN 30.00
-           END;
+    RETURN v_descuento;
 END;
 $$;
 
 COMMENT ON FUNCTION fn_descuento_cliente(integer)
-    IS 'RN-06: descuento según tipo de cliente. STABLE.';
+    IS 'RN-06: descuento registrado en Cliente.descuento_porcentaje. STABLE.';
 
 
 -- U2/D3: años cumplidos desde una fecha de ingreso.

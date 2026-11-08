@@ -229,6 +229,13 @@ SELECT fn_descuento_cliente(9001) AS socio,
        fn_descuento_cliente(9003) AS exportador;
 ROLLBACK TO SAVEPOINT rn06_ok;
 
+\echo '--- RN-06 OK: descuento especial cargado en la columna (12.50) ---'
+SAVEPOINT rn06_especial;
+INSERT INTO Cliente (id_cliente, apellido, nombre, cuit, tipo_cliente, tipo_documento, nro_documento, calle_cliente, nro_calle_cliente, id_localidad, fecha_alta, descuento_porcentaje)
+VALUES (9006, 'Especial', 'Cliente', '20900000006', 'Socio', 'DNI', '30000006', 'Calle Cliente', 60, 9001, CURRENT_DATE, 12.50);
+SELECT fn_descuento_cliente(9006) AS descuento_especial;
+ROLLBACK TO SAVEPOINT rn06_especial;
+
 \echo '--- RN-06 FALLA: cliente con descuento fuera de rango ---'
 SAVEPOINT rn06_falla;
 -- ERROR ESPERADO: check_cliente_descuento (SQLSTATE 23514)

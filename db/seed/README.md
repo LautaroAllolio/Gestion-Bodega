@@ -33,7 +33,7 @@ Para una base vacía:
 $env:PGPASSWORD = "<password>"
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d postgres -c "CREATE DATABASE bodega_seed"
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed -v ON_ERROR_STOP=1 -f db/migrations/001_esquema.sql
-& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed -v ON_ERROR_STOP=1 -f db/migrations/002_contraints.sql
+& "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed -v ON_ERROR_STOP=1 -f db/migrations/002_constraints.sql
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed -v ON_ERROR_STOP=1 -f db/migrations/003_funciones.sql
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed -v ON_ERROR_STOP=1 -f db/migrations/004_procedimientos.sql
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed -v ON_ERROR_STOP=1 -f db/migrations/005_triggers.sql
@@ -65,6 +65,21 @@ $env:PGPASSWORD = "<password>"
 
 Sin `--reset`, el script aborta si detecta datos en `Cepa`, `Vino` o
 `ComprobanteVenta`.
+
+### Fecha base y consultas relativas
+
+La fecha base por defecto es `2026-11-01`. Las consultas de la etapa 4 que usan
+`CURRENT_DATE` (por ejemplo, ventas de los últimos 30 días, stock con movimientos
+recientes o documentos pendientes) solo devuelven filas si el historial cargado
+llega hasta una fecha cercana a la fecha de ejecución. Antes de la defensa,
+recargar con una fecha base próxima al día de la consulta:
+
+```powershell
+.\.venv\Scripts\python.exe db/seed/load.py --reset --scale 1.0 --base-date 2026-11-20
+```
+
+La recarga mantiene la misma semilla y, por lo tanto, el mismo dataset; solo
+desplaza las fechas del historial.
 
 ## Opciones
 

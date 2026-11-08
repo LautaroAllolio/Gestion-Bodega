@@ -83,6 +83,10 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO bodega_api;
 GRANT EXECUTE ON ALL FUNCTIONS  IN SCHEMA public TO bodega_api;
 GRANT EXECUTE ON ALL PROCEDURES IN SCHEMA public TO bodega_api;
 
+/* La auditoría de precios es append-only para la API: el trigger inserta
+ * las filas y la API solo puede consultarlas. Se revocan UPDATE y DELETE. */
+REVOKE UPDATE, DELETE ON AuditoriaPrecio FROM bodega_api;
+
 
 /* ------------------------------------------------------------ */
 /* bodega_lectura: solo lectura para reportes                   */
