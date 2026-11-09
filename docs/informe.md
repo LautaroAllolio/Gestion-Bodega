@@ -236,62 +236,173 @@ La regla general es usar la restricción más simple que exprese la regla. Si al
 
 ## Demostración de concurrencia
 
-El escenario es la venta de la última botella de un vino en una sala. Se usan dos sesiones `psql` conectadas a la misma base y el nivel de aislamiento por defecto de PostgreSQL, `READ COMMITTED`. El ejemplo usa los identificadores de los datos de prueba de `db_tests.sql` (sala 9001, vino `VINO_TEST`, clientes 9001 y 9002); si se ejecuta sobre la base del seed, hay que reemplazarlos por valores existentes.
+La prueba se ejecutó sobre la base local `bodega_test` en PostgreSQL 18, con las migraciones `001` a `007` aplicadas y los datos cargados con `db/seed/load.py`. Se usaron dos sesiones `psql` conectadas a la misma base y el nivel de aislamiento por defecto de PostgreSQL, `READ COMMITTED`.
+
+### Configuración previa de `bodega_test`
+
+Antes de la demo se verificó que la base tuviera el esquema, las vistas y las funciones creadas. La carga se ejecutó con:
+
+```powershell
+.\.venv\Scripts\python.exe db/seed/load.py --reset --scale 1.0 --base-date 2026-11-08
+```
+
+Las capturas muestran la salida de `\dt`, `\dv`, `\df` y de las consultas de control.
+
+![Tablas y vistas de bodega_test](capturas/configuracion_1_dt_y_dv.jpeg)
+
+*Salida de `\dt` y `\dv`: tablas y vistas creadas en `bodega_test`.*
+
+![Funciones de bodega_test](capturas/configuracion_2_df.jpeg)
+
+*Salida de `\df`: funciones y procedimientos disponibles.*
+
+![Integración de datos a las tablas](capturas/integracion_datos_a_tablas.jpeg)
+
+*Resultado de la carga de datos en las tablas.*
+
+![Verificación de la etapa 3](capturas/verificacion_etapa3_sql.jpeg)
+
+*Controles de `verificacion_etapa3.sql`.*
+
+[Salida de consultas de verificación](capturas/ejecuci_n_consultas_bodega.pdf)
+
+*Conteos y consultas ejecutadas sobre `bodega_test`.*
+
+### Escenario
+
+Se utilizó la sala 1, el vino `V0420` (Romero Espumante 0420) y los clientes 1 y 2. El stock original de la sala para ese vino era 3; para la prueba se dejó en 1. Al finalizar se eliminaron los comprobantes generados y se restauró el stock a 3.
 
 ### Preparación
 
 ```sql
--- Dejar una sola botella disponible en la sala de prueba.
 UPDATE StockSala
    SET cantidad = 1
- WHERE id_sala = 9001
-   AND codigo_vino = 'VINO_TEST';
+ WHERE id_sala = 1
+   AND codigo_vino = 'V0420';
 ```
 
-### Sesión A
+### Con `SELECT ... FOR UPDATE`
+
+#### Sesión A
 
 ```sql
 BEGIN;
 SELECT cantidad
   FROM StockSala
- WHERE id_sala = 9001
-   AND codigo_vino = 'VINO_TEST'
+ WHERE id_sala = 1
+   AND codigo_vino = 'V0420'
    FOR UPDATE;              -- devuelve 1 y bloquea la fila
+
 INSERT INTO ComprobanteVenta (fecha, id_cliente, id_sala, subtotal, descuento, total)
-VALUES (CURRENT_DATE, 9001, 9001, 0, 0, 0)
-RETURNING nro_comprobante AS nro \gset
+VALUES (CURRENT_DATE, 1, 1, 0, 0, 0)
+RETURNING nro_comprobante AS nro_a \gset
+
 INSERT INTO DetalleVenta (nro_comprobante, codigo_vino, cantidad, precio_unitario, descuento_aplicado, subtotal)
-VALUES (:nro, 'VINO_TEST', 1, 0, 0, 0);
+VALUES (:nro_a, 'V0420', 1, 0, 0, 0);
+
 COMMIT;                     -- el trigger descuenta la botella
 ```
 
-### Sesión B
+#### Sesión B
 
 ```sql
 BEGIN;
 SELECT cantidad
   FROM StockSala
- WHERE id_sala = 9001
-   AND codigo_vino = 'VINO_TEST'
-   FOR UPDATE;              -- queda esperando a que A termine
+ WHERE id_sala = 1
+   AND codigo_vino = 'V0420'
+   FOR UPDATE;              -- espera a que A termine
+
 -- Cuando A hace COMMIT, esta consulta devuelve 0.
 INSERT INTO ComprobanteVenta (fecha, id_cliente, id_sala, subtotal, descuento, total)
-VALUES (CURRENT_DATE, 9002, 9001, 0, 0, 0)
-RETURNING nro_comprobante AS nro \gset
+VALUES (CURRENT_DATE, 2, 1, 0, 0, 0)
+RETURNING nro_comprobante AS nro_b \gset
+
 INSERT INTO DetalleVenta (nro_comprobante, codigo_vino, cantidad, precio_unitario, descuento_aplicado, subtotal)
-VALUES (:nro, 'VINO_TEST', 1, 0, 0, 0);
+VALUES (:nro_b, 'V0420', 1, 0, 0, 0);
+
 -- ERROR ESPERADO: stock insuficiente (RN-09).
 ROLLBACK;
 ```
 
 Con `FOR UPDATE`, la segunda sesión no puede leer la fila mientras la primera la tiene bloqueada. Al continuar, ve el stock ya descontado y el trigger `trg_renglon_2_valida_stock` rechaza la venta. El stock nunca queda negativo.
 
-Si se repite el experimento **sin** `FOR UPDATE`, ambas sesiones pueden leer `cantidad = 1` antes de que alguna escriba. Bajo `READ COMMITTED` cada sentencia ve la última versión confirmada, pero la lectura inicial no bloquea la fila. Sin el bloqueo, las dos podrían creer que hay stock y vender la misma botella; el trigger de validación y el `UPDATE` de stock con bloqueo son los que serializan la operación y evitan la doble venta. Por eso la base es la que protege la regla, no la aplicación.
+### Sin `SELECT ... FOR UPDATE`
 
-Las capturas de las dos sesiones se incorporan a continuación:
+Se restauró el stock a 1 y se repitió el experimento sin el bloqueo explícito.
 
-- `![Concurrencia - sesión A](ruta/a/captura_sesion_a.png)` — pendiente de agregar.
-- `![Concurrencia - sesión B](ruta/a/captura_sesion_b.png)` — pendiente de agregar.
+#### Sesión A
+
+```sql
+BEGIN;
+SELECT cantidad
+  FROM StockSala
+ WHERE id_sala = 1
+   AND codigo_vino = 'V0420';   -- devuelve 1, sin bloquear
+
+INSERT INTO ComprobanteVenta (fecha, id_cliente, id_sala, subtotal, descuento, total)
+VALUES (CURRENT_DATE, 1, 1, 0, 0, 0)
+RETURNING nro_comprobante AS nro_a2 \gset
+
+INSERT INTO DetalleVenta (nro_comprobante, codigo_vino, cantidad, precio_unitario, descuento_aplicado, subtotal)
+VALUES (:nro_a2, 'V0420', 1, 0, 0, 0);
+
+-- La transacción queda abierta: el stock ya se descontó, pero A todavía no confirmó.
+```
+
+#### Sesión B
+
+```sql
+BEGIN;
+SELECT cantidad
+  FROM StockSala
+ WHERE id_sala = 1
+   AND codigo_vino = 'V0420';   -- devuelve 1: lectura vieja, sin bloqueo
+
+INSERT INTO ComprobanteVenta (fecha, id_cliente, id_sala, subtotal, descuento, total)
+VALUES (CURRENT_DATE, 2, 1, 0, 0, 0)
+RETURNING nro_comprobante AS nro_b2 \gset
+
+INSERT INTO DetalleVenta (nro_comprobante, codigo_vino, cantidad, precio_unitario, descuento_aplicado, subtotal)
+VALUES (:nro_b2, 'V0420', 1, 0, 0, 0);
+-- Queda esperando el lock del trigger.
+```
+
+Cuando A ejecuta `COMMIT`, B se desbloquea y el trigger vuelve a leer el stock:
+
+```text
+ERROR: Stock insuficiente del vino V0420 en la sala 1: disponible 0, pedido 1 (RN-09)
+```
+
+B ejecuta `ROLLBACK`.
+
+> Para reproducir la sesión B en `psql` sin que el error esperado corte el script, ejecutarla con `\set ON_ERROR_STOP off`.
+
+### Explicación
+
+Bajo `READ COMMITTED` cada sentencia ve la última versión confirmada, pero un `SELECT` normal no bloquea la fila. Sin `FOR UPDATE`, ambas sesiones pueden leer `cantidad = 1` antes de que alguna escriba; la lectura de B queda vieja. `FOR UPDATE` bloquea la fila y, al liberarse, devuelve la versión actualizada. El trigger de validación de stock también usa `FOR UPDATE`, por eso serializa la escritura y protege la invariante aunque la aplicación no bloquee la lectura. El `CHECK (cantidad >= 0)` es la última barrera contra stock negativo.
+
+### Capturas de la prueba
+
+![Con FOR UPDATE: A con la transacción abierta y B bloqueada](capturas/concurrencia_for_update_1_a_abierta_b_bloqueada.jpeg)
+
+*A mantiene el lock y B espera en el `SELECT ... FOR UPDATE`.*
+
+![Con FOR UPDATE: A confirma, B se desbloquea y recibe el error](capturas/concurrencia_for_update_2_a_commit_b_desbloqueada.jpeg)
+
+*B recibe `cantidad = 0` y el trigger rechaza la venta con RN-09.*
+
+![Sin FOR UPDATE: ambas sesiones leen el stock](capturas/concurrencia_sin_for_update_1_ambos_leen_stock.jpeg)
+
+*A y B leen `cantidad = 1`.*
+
+![Sin FOR UPDATE: A descuenta y B espera el trigger](capturas/concurrencia_sin_for_update_2_a_descuenta_b_bloqueada.jpeg)
+
+*A ya descontó el stock, pero la transacción sigue abierta; B espera el lock del trigger.*
+
+![Sin FOR UPDATE: A confirma y B recibe el error](capturas/concurrencia_sin_for_update_3_a_commit_error_b.jpeg)
+
+*B se desbloquea y el trigger rechaza la venta con RN-09.*
 
 # Etapa 3
 
