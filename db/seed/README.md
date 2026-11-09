@@ -141,8 +141,9 @@ rango recomendado de 300 a 1000 filas.
 3. Las tablas se cargan en orden topológico con la estrategia elegida:
    `COPY` por defecto, `executemany` o `individual`.
 4. La dependencia circular `Localidad → Empleado → SalaDeVenta → Localidad` se
-   resuelve cargando `Localidad.cuit_encargado` en `NULL` y actualizándolo
-   después de cargar `Empleado`.
+   resuelve asignando de antemano un empleado a cada localidad y declarando
+   `FK_Cuit_Empleado` como diferible hasta el fin de la transacción. Así, la FK
+   se valida al confirmar la carga sin permitir localidades sin encargado.
 5. Los totales de `ComprobanteVenta` se calculan en Python a partir de los
    renglones, con la misma fórmula de los triggers y funciones de la etapa 2.
 6. Se ajustan las secuencias con `setval`, se ejecuta `ANALYZE` y se vuelven a

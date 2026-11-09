@@ -286,7 +286,7 @@ CREATE TABLE Localidad
 	nombre varchar(50) NOT NULL,
 	provincia varchar(50) NOT NULL,
 	codigo_postal varchar(50) NOT NULL,
-	cuit_encargado cuit_dom NULL
+	cuit_encargado cuit_dom NOT NULL
 )
 ;
 

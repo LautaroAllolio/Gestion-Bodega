@@ -116,8 +116,8 @@ ROLLBACK;
 
 /* ============================================================
    D3 - La sala de una localidad determinada fue dada de baja:
-        eliminar los empleados de esa sala que trabajaron menos de
-        dos anios.
+        eliminar los empleados no encargados de esa sala que
+        trabajaron menos de dos anios.
    Parametros: id_localidad = 4 (Lujan de Cuyo), id_sala = 4.
    Cambiar ambos valores para probar otra sala/localidad.
    Estrategia: fn_antiguedad_anios(fecha_ingreso) < 2.
@@ -135,9 +135,15 @@ SELECT e.cuit,
        s.id_localidad,
        l.nombre AS localidad,
        CASE
-           WHEN fn_antiguedad_anios(e.fecha_ingreso) < 2 THEN 'SI'
+           WHEN fn_antiguedad_anios(e.fecha_ingreso) < 2
+            AND NOT EXISTS (
+                  SELECT 1
+                    FROM Localidad encargada
+                   WHERE encargada.cuit_encargado = e.cuit
+                )
+           THEN 'SI'
            ELSE 'NO'
-       END AS menos_2
+       END AS borrable
   FROM Empleado e
   JOIN SalaDeVenta s ON s.id_sala = e.id_sala
   JOIN Localidad l   ON l.id_localidad = s.id_localidad
@@ -150,23 +156,40 @@ USING SalaDeVenta s
 WHERE e.id_sala = s.id_sala
   AND s.id_localidad = 4
   AND e.id_sala = 4
-  AND fn_antiguedad_anios(e.fecha_ingreso) < 2;
+  AND fn_antiguedad_anios(e.fecha_ingreso) < 2
+  AND NOT EXISTS (
+        SELECT 1
+          FROM Localidad l
+         WHERE l.cuit_encargado = e.cuit
+      );
 
--- Control posterior: quedan los empleados con 2 anios o mas
+-- Control posterior: no quedan empleados borrables con menos de 2 anios
 SELECT COUNT(*) AS empleados_sala_4 FROM Empleado WHERE id_sala = 4;
 
-SELECT COUNT(*) AS empleados_menos_2_restantes
+SELECT COUNT(*) AS empleados_borrables_menos_2_restantes
   FROM Empleado e
   JOIN SalaDeVenta s ON s.id_sala = e.id_sala
  WHERE e.id_sala = 4
    AND s.id_localidad = 4
-   AND fn_antiguedad_anios(e.fecha_ingreso) < 2;
+   AND fn_antiguedad_anios(e.fecha_ingreso) < 2
+   AND NOT EXISTS (
+         SELECT 1
+           FROM Localidad l
+          WHERE l.cuit_encargado = e.cuit
+       );
 
--- La FK Localidad.cuit_encargado es ON DELETE SET NULL: controlar
--- si algun empleado borrado era encargado de una localidad.
-SELECT COUNT(*) AS localidades_encargado_afectadas
-  FROM Localidad
- WHERE cuit_encargado IN ('27782447837', '30382664465', '30329481596');
+-- Los encargados que cumplen el criterio de antiguedad se preservan por RN-02.
+SELECT COUNT(DISTINCT e.cuit) AS encargados_preservados
+  FROM Empleado e
+  JOIN SalaDeVenta s ON s.id_sala = e.id_sala
+ WHERE e.id_sala = 4
+   AND s.id_localidad = 4
+   AND fn_antiguedad_anios(e.fecha_ingreso) < 2
+   AND EXISTS (
+         SELECT 1
+           FROM Localidad l
+          WHERE l.cuit_encargado = e.cuit
+       );
 
 ROLLBACK;
 

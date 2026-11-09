@@ -29,7 +29,7 @@ INSERT INTO Departamento (id_departamento, nombre, provincia)
 VALUES (9001, 'San Rafael', 'Mendoza');
 
 INSERT INTO Localidad (id_localidad, nombre, provincia, codigo_postal, cuit_encargado)
-VALUES (9001, 'San Rafael', 'Mendoza', '5600', NULL);
+VALUES (9001, 'San Rafael', 'Mendoza', '5600', '27900000001');
 
 INSERT INTO SalaDeVenta (id_sala, calle, dia_cierre, id_localidad, numero_calle)
 VALUES (9001, 'Av. Siempre Viva', 'Lunes', 9001, 742);
@@ -37,9 +37,20 @@ VALUES (9001, 'Av. Siempre Viva', 'Lunes', 9001, 742);
 INSERT INTO Empleado (cuit, nombre, fecha_ingreso, salario, id_sala)
 VALUES ('27900000001', 'Ana Perez', '2015-03-01', 850000.00, 9001);
 
-UPDATE Localidad
-   SET cuit_encargado = '27900000001'
- WHERE id_localidad = 9001;
+SET CONSTRAINTS FK_Cuit_Empleado IMMEDIATE;
+
+\echo '--- RN-02 FALLA: localidad sin encargado ---'
+SAVEPOINT rn02_sin_encargado;
+-- ERROR ESPERADO: cuit_encargado no admite NULL (SQLSTATE 23502)
+INSERT INTO Localidad (id_localidad, nombre, provincia, codigo_postal, cuit_encargado)
+VALUES (9002, 'Localidad sin encargado', 'Mendoza', '5601', NULL);
+ROLLBACK TO SAVEPOINT rn02_sin_encargado;
+
+\echo '--- RN-02 FALLA: borrar al encargado de una localidad ---'
+SAVEPOINT rn02_borrar_encargado;
+-- ERROR ESPERADO: la localidad conserva una referencia al empleado (SQLSTATE 23503)
+DELETE FROM Empleado WHERE cuit = '27900000001';
+ROLLBACK TO SAVEPOINT rn02_borrar_encargado;
 
 INSERT INTO Cepa (id_cepa, nombre, tipo)
 VALUES (9001, 'Malbec', 'Tinta'),
@@ -122,13 +133,14 @@ ROLLBACK TO SAVEPOINT rn01_falla;
 
 \echo '--- RN-02 OK: localidad con sala y encargado ---'
 SAVEPOINT rn02_ok;
+SET CONSTRAINTS FK_Cuit_Empleado DEFERRED;
 INSERT INTO Localidad (id_localidad, nombre, provincia, codigo_postal, cuit_encargado)
-VALUES (9002, 'San Rafael RN02', 'Mendoza', '5601', NULL);
+VALUES (9002, 'San Rafael RN02', 'Mendoza', '5601', '27900000002');
 INSERT INTO SalaDeVenta (id_sala, calle, dia_cierre, id_localidad, numero_calle)
 VALUES (9002, 'Calle RN02', 'Martes', 9002, 123);
 INSERT INTO Empleado (cuit, nombre, fecha_ingreso, salario, id_sala)
 VALUES ('27900000002', 'Encargado RN02', '2018-01-01', 700000.00, 9002);
-UPDATE Localidad SET cuit_encargado = '27900000002' WHERE id_localidad = 9002;
+SET CONSTRAINTS FK_Cuit_Empleado IMMEDIATE;
 SELECT l.nombre AS localidad, l.cuit_encargado, s.id_sala
   FROM Localidad l
   JOIN SalaDeVenta s ON s.id_localidad = l.id_localidad

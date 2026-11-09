@@ -217,7 +217,7 @@ def read_catalogs(seed: int) -> tuple[dict[str, list[tuple]], list[str]]:
 
     with (BASE_DIR / "localidades.csv").open(encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
-            data["localidad"].append((int(row["id_localidad"]), row["nombre"], row["provincia"], row["codigo_postal"], None))
+            data["localidad"].append((int(row["id_localidad"]), row["nombre"], row["provincia"], row["codigo_postal"]))
 
     with (BASE_DIR / "tipos_vino.csv").open(encoding="utf-8", newline="") as handle:
         tipos = [row["tipo"] for row in csv.DictReader(handle)]
@@ -305,10 +305,17 @@ def generate(seed: int, base_date: date, scale: float) -> tuple[dict[str, list[t
         empleados_por_localidad[sala_localidad[id_sala]].append(cuit)
     rng_encargado = rng_for(seed, "encargado")
     encargados: list[tuple[str, int]] = []
-    for id_localidad, _nombre, _prov, _cp, _cuit in localidades:
+    for id_localidad, _nombre, _prov, _cp in localidades:
         candidatos = empleados_por_localidad.get(id_localidad, [])
-        if candidatos:
-            encargados.append((rng_encargado.choice(candidatos), id_localidad))
+        if not candidatos:
+            raise ValueError(f"Localidad {id_localidad} no tiene empleados para asignar un encargado")
+        encargados.append((rng_encargado.choice(candidatos), id_localidad))
+
+    encargados_por_localidad = {id_localidad: cuit for cuit, id_localidad in encargados}
+    data["localidad"] = [
+        (id_localidad, nombre, provincia, codigo_postal, encargados_por_localidad[id_localidad])
+        for id_localidad, nombre, provincia, codigo_postal in localidades
+    ]
 
     rng_tl = rng_for(seed, "transportista_localidad")
     pares_tl: set[tuple[int, int]] = set()
@@ -604,6 +611,10 @@ def validate(data: dict[str, list[tuple]], encargados: list[tuple[str, int]]) ->
         if not rows:
             errors.append(f"{table}: sin filas")
 
+    for row in data["localidad"]:
+        if row[index["localidad"]["cuit_encargado"]] is None:
+            errors.append(f"localidad {row[index['localidad']['id_localidad']]}: sin encargado")
+
     for table, cols in PK.items():
         keys = [tuple(row[index[table][col]] for col in cols) for row in data[table]]
         if len(keys) != len(set(keys)):
@@ -764,10 +775,6 @@ def set_disabled_triggers(cursor, disabled: bool) -> None:
         cursor.execute(f"ALTER TABLE {table} {action} TRIGGER USER")
 
 
-def update_encargados(cursor, encargados: list[tuple[str, int]]) -> None:
-    cursor.executemany("UPDATE localidad SET cuit_encargado = %s WHERE id_localidad = %s", encargados)
-
-
 def set_sequences(cursor) -> None:
     for table, (column,) in SERIALS.items():
         cursor.execute(
@@ -822,6 +829,12 @@ def run_controls(cursor) -> dict[str, int]:
     controls["stock_deposito_negativo"] = cursor.fetchone()[0]
     cursor.execute("SELECT count(*) FROM stocksala WHERE cantidad < 0")
     controls["stock_sala_negativo"] = cursor.fetchone()[0]
+    cursor.execute(
+        "SELECT count(*) FROM localidad l"
+        " WHERE l.cuit_encargado IS NULL"
+        "    OR NOT EXISTS (SELECT 1 FROM empleado e WHERE e.cuit = l.cuit_encargado)"
+    )
+    controls["localidades_sin_encargado"] = cursor.fetchone()[0]
 
     orphan_checks = {
         "detalleventa_sin_comprobante": ("detalleventa d", "comprobanteventa c", "c.nro_comprobante = d.nro_comprobante", "c.nro_comprobante"),
@@ -844,7 +857,6 @@ def run_controls(cursor) -> dict[str, int]:
 def load_dataset(
     database,
     data: dict[str, list[tuple]],
-    encargados: list[tuple[str, int]],
     args,
     *,
     strategy: str | None = None,
@@ -869,7 +881,6 @@ def load_dataset(
                 timings[table] = round(time.perf_counter() - start, 3)
                 counts[table] = len(data[table])
 
-            update_encargados(cursor, encargados)
             if not benchmark:
                 set_sequences(cursor)
                 cursor.execute("ANALYZE")
@@ -879,14 +890,14 @@ def load_dataset(
     return counts, timings, controls
 
 
-def benchmark(database, data: dict[str, list[tuple]], encargados: list[tuple[str, int]], args) -> dict[str, dict]:
+def benchmark(database, data: dict[str, list[tuple]], args) -> dict[str, dict]:
     results: dict[str, dict] = {}
     for strategy in STRATEGIES:
         print(f"Benchmark: {strategy} ...", flush=True)
         started = time.perf_counter()
         try:
             counts, timings, controls = load_dataset(
-                database, data, encargados, args, strategy=strategy, benchmark=True
+                database, data, args, strategy=strategy, benchmark=True
             )
         except Exception as exc:
             results[strategy] = {"error": str(exc)}
@@ -984,9 +995,9 @@ def main(argv: list[str] | None = None) -> int:
     database = connect(args)
     try:
         if args.benchmark:
-            results = benchmark(database, data, encargados, args)
+            results = benchmark(database, data, args)
         else:
-            counts, timings, controls = load_dataset(database, data, encargados, args)
+            counts, timings, controls = load_dataset(database, data, args)
     finally:
         database.close()
 
@@ -1035,4 +1046,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

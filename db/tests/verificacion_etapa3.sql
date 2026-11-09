@@ -190,8 +190,13 @@ SELECT 'triggers_usuario_deshabilitados', count(*), 0
 
 UNION ALL
 SELECT 'localidades_sin_encargado', count(*), 0
-  FROM localidad
- WHERE cuit_encargado IS NULL;
+  FROM localidad l
+ WHERE l.cuit_encargado IS NULL
+    OR NOT EXISTS (
+          SELECT 1
+            FROM empleado e
+           WHERE e.cuit = l.cuit_encargado
+       );
 
 SELECT control,
        resultado,

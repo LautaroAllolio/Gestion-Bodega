@@ -155,7 +155,9 @@ ALTER TABLE Ingreso ADD CONSTRAINT FK_Ingreso_Transportista
 
 ALTER TABLE Localidad DROP CONSTRAINT FK_Cuit_Empleado;
 ALTER TABLE Localidad ADD CONSTRAINT FK_Cuit_Empleado
-    FOREIGN KEY (cuit_encargado) REFERENCES Empleado (cuit) ON DELETE Set Null ON UPDATE Cascade;
+    FOREIGN KEY (cuit_encargado) REFERENCES Empleado (cuit)
+    ON DELETE Restrict ON UPDATE Cascade
+    DEFERRABLE INITIALLY DEFERRED;
 
 ALTER TABLE LoteUva DROP CONSTRAINT FK_LoteUva_Bodega;
 ALTER TABLE LoteUva ADD CONSTRAINT FK_LoteUva_Bodega
