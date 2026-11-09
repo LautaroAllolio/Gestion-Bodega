@@ -573,14 +573,14 @@ Los 22 controles dieron cero. El volcado se generó con `pg_dump` 18.3 en format
 
 ```text
 db/dump_completo.sql.gz
-10.106.395 bytes
-SHA-256 45cf607865aa4aa331e0cca0fdc7cbcbf02e384ca3d193fea78081d3fdc949ff
+10.105.169 bytes
+SHA-256 08d0915c4a6f890ffc845e8c0632cc34a4a9fb340b244245a7ca9f1f709230b1
 31 bloques COPY · 745.569 filas
 ```
 
 Se probó la restauración en una base temporal `bodega_restore`: las 31 tablas y las 745.569 filas coincidieron con `bodega_seed`, y los 22 controles volvieron a dar cero. Luego se eliminó la base temporal. Al usar `--no-owner --no-privileges`, el volcado no depende de los roles del clúster; para recrearlos se ejecuta `db/migrations/007_roles.sql` después de restaurar.
 
-> **Pendiente de regeneración:** el volcado versionado se generó antes de corregir `fn_descuento_cliente` para leer `Cliente.descuento_porcentaje`. Hay que regenerarlo con el comando de `README.md` y actualizar el tamaño y el SHA-256 de esta sección. Hasta entonces, el hash anterior corresponde a la versión previa de la función.
+El volcado actual se regeneró con la versión corregida de `fn_descuento_cliente`, que lee `Cliente.descuento_porcentaje` en lugar de aplicar un porcentaje fijo por tipo de cliente. Se verificó la definición de la función y los 22 controles tanto en `bodega_seed` como en `bodega_restore`.
 
 # Etapa 4
 

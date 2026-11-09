@@ -103,9 +103,12 @@ actuales son (hay que regenerarlo y actualizar estos valores después de cambiar
 funciones, triggers o datos):
 
 ```text
-10.106.395 bytes
-SHA-256 45cf607865aa4aa331e0cca0fdc7cbcbf02e384ca3d193fea78081d3fdc949ff
+10.105.169 bytes
+SHA-256 08d0915c4a6f890ffc845e8c0632cc34a4a9fb340b244245a7ca9f1f709230b1
 ```
+
+El volcado actual incluye la versión corregida de `fn_descuento_cliente`, que lee
+`Cliente.descuento_porcentaje` en lugar de aplicar un porcentaje fijo por tipo.
 
 Para verificar el checksum:
 
