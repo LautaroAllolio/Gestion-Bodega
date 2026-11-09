@@ -15,7 +15,7 @@ from .errors import (
     pool_timeout_handler,
     psycopg_exception_handler,
 )
-from .routers import clientes, documentos, reportes, vinos
+from .routers import catalogos, clientes, documentos, reportes, vinos
 from .schemas import SaludOut
 
 settings = get_settings()
@@ -51,6 +51,7 @@ app.add_exception_handler(BusinessValidationError, business_validation_handler)
 app.include_router(vinos.router)
 app.include_router(clientes.router)
 app.include_router(documentos.router)
+app.include_router(catalogos.router)
 app.include_router(reportes.router)
 
 

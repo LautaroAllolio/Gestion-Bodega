@@ -1,15 +1,17 @@
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 
 from .. import repository
 from ..schemas import (
     ComprobanteCreate,
     ComprobanteOut,
+    EstadoDocumento,
     IngresoCreate,
     IngresoOut,
     RenglonIngresoInput,
     RenglonTransferenciaInput,
     TransferenciaCreate,
     TransferenciaOut,
+    TransferenciaPage,
 )
 
 router = APIRouter(tags=["documentos"])
@@ -24,9 +26,23 @@ def crear_comprobante(payload: ComprobanteCreate):
     return repository.create_comprobante(payload.model_dump())
 
 
+@router.post("/comprobantes/cotizar", response_model=ComprobanteOut)
+def cotizar_comprobante(payload: ComprobanteCreate):
+    return repository.quote_comprobante(payload.model_dump())
+
+
 @router.get("/comprobantes/{nro_comprobante}", response_model=ComprobanteOut)
 def obtener_comprobante(nro_comprobante: int):
     return repository.get_comprobante(nro_comprobante)
+
+
+@router.get("/transferencias", response_model=TransferenciaPage)
+def listar_transferencias(
+    estado: EstadoDocumento | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=20, ge=1, le=100),
+):
+    return repository.list_transferencias(estado, page, limit)
 
 
 @router.post(
