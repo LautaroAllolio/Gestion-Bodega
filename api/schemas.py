@@ -222,6 +222,21 @@ class TransferenciaOut(BaseModel):
     renglones: list[RenglonTransferenciaOut]
 
 
+class TransferenciaListItem(BaseModel):
+    nro_transferencia: int
+    id_sala_solicitante: int
+    id_deposito: int
+    fecha_confeccion: date
+    estado: EstadoDocumento
+
+
+class TransferenciaPage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    items: list[TransferenciaListItem]
+
+
 class RenglonIngresoOut(BaseModel):
     codigo_vino: str
     nombre_comercial: str

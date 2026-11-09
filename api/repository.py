@@ -92,6 +92,8 @@ def list_vinos(
     q: str | None,
     tipo: str | None,
     bodega: str | None,
+    cepa: str | None,
+    anada: int | None,
     page: int,
     limit: int,
 ) -> dict[str, Any]:
@@ -106,6 +108,22 @@ def list_vinos(
     if bodega:
         where.append("b.razon_social ILIKE %s")
         params.append(f"%{bodega}%")
+    if cepa:
+        where.append(
+            """
+            EXISTS (
+                SELECT 1
+                  FROM VinoCepa vc
+                  JOIN Cepa c ON c.id_cepa = vc.id_cepa
+                 WHERE vc.codigo_vino = v.codigo_vino
+                   AND c.nombre ILIKE %s
+            )
+            """
+        )
+        params.append(f"%{cepa}%")
+    if anada is not None:
+        where.append("v.anada = %s")
+        params.append(anada)
     clause = f" WHERE {' AND '.join(where)}" if where else ""
     total_row = fetch_one(
         "SELECT count(*) AS total FROM Vino v JOIN Bodega b ON b.cuit = v.cuit_bodega"
@@ -458,6 +476,90 @@ def create_comprobante(payload: dict[str, Any]) -> dict[str, Any]:
     return get_comprobante(nro)
 
 
+class _QuoteRollback(Exception):
+    def __init__(self, result: dict[str, Any]) -> None:
+        self.result = result
+
+
+def quote_comprobante(payload: dict[str, Any]) -> dict[str, Any]:
+    data = dict(payload)
+    try:
+        with transaction() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO ComprobanteVenta
+                        (fecha, id_cliente, id_sala, subtotal, descuento, total)
+                    VALUES (COALESCE(%s, CURRENT_DATE), %s, %s, 0, 0, 0)
+                    RETURNING nro_comprobante
+                    """,
+                    (data.get("fecha"), data["id_cliente"], data["id_sala"]),
+                )
+                nro = cur.fetchone()["nro_comprobante"]
+                for renglon in data["renglones"]:
+                    cur.execute(
+                        """
+                        INSERT INTO DetalleVenta
+                            (nro_comprobante, codigo_vino, cantidad,
+                             precio_unitario, descuento_aplicado, subtotal)
+                        VALUES (%s, %s, %s, 0, 0, 0)
+                        """,
+                        (nro, renglon["codigo_vino"], renglon["cantidad"]),
+                    )
+                cur.execute(
+                    COMPROBANTE_SELECT + " WHERE cv.nro_comprobante = %s", (nro,)
+                )
+                row = cur.fetchone()
+                cur.execute(
+                    """
+                    SELECT dv.codigo_vino, v.nombre_comercial, dv.cantidad,
+                           dv.precio_unitario, dv.descuento_aplicado, dv.subtotal
+                      FROM DetalleVenta dv
+                      JOIN Vino v ON v.codigo_vino = dv.codigo_vino
+                     WHERE dv.nro_comprobante = %s
+                     ORDER BY dv.codigo_vino
+                    """,
+                    (nro,),
+                )
+                row["renglones"] = cur.fetchall()
+                raise _QuoteRollback(row)
+    except _QuoteRollback as exc:
+        return exc.result
+
+
+def list_transferencias(
+    estado: str | None,
+    page: int,
+    limit: int,
+) -> dict[str, Any]:
+    where: list[str] = []
+    params: list[Any] = []
+    if estado:
+        where.append("estado = %s")
+        params.append(estado)
+    clause = f" WHERE {' AND '.join(where)}" if where else ""
+    total_row = fetch_one(
+        "SELECT count(*) AS total FROM Transferencia" + clause, tuple(params)
+    )
+    offset = (page - 1) * limit
+    items = fetch_all(
+        """
+        SELECT nro_transferencia, id_sala_solicitante, id_deposito,
+               fecha_confeccion, estado::text AS estado
+          FROM Transferencia
+        """
+        + clause
+        + " ORDER BY nro_transferencia DESC LIMIT %s OFFSET %s",
+        tuple(params + [limit, offset]),
+    )
+    return {
+        "total": total_row["total"] if total_row else 0,
+        "page": page,
+        "limit": limit,
+        "items": items,
+    }
+
+
 def get_transferencia(nro_transferencia: int) -> dict[str, Any]:
     row = fetch_one(
         TRANSFERENCIA_SELECT + " WHERE nro_transferencia = %s", (nro_transferencia,)
@@ -616,3 +718,55 @@ def procesar_ingreso(id_ingreso: int) -> dict[str, Any]:
                 raise NotFoundError(f"No existe el ingreso {id_ingreso}")
             cur.execute("CALL sp_procesar_ingreso(%s)", (id_ingreso,))
     return get_ingreso(id_ingreso)
+
+
+def list_bodegas() -> list[dict[str, Any]]:
+    return fetch_all(
+        """
+        SELECT cuit, razon_social
+          FROM Bodega
+         ORDER BY razon_social, cuit
+        """
+    )
+
+
+def list_cepas() -> list[dict[str, Any]]:
+    return fetch_all(
+        """
+        SELECT id_cepa, nombre, tipo
+          FROM Cepa
+         ORDER BY nombre, id_cepa
+        """
+    )
+
+
+def list_maridajes() -> list[dict[str, Any]]:
+    return fetch_all(
+        """
+        SELECT id_maridaje, nombre, temperatura_servicio
+          FROM Maridaje
+         ORDER BY nombre, id_maridaje
+        """
+    )
+
+
+def list_salas() -> list[dict[str, Any]]:
+    return fetch_all(
+        """
+        SELECT s.id_sala, s.calle, s.numero_calle, s.id_localidad,
+               l.nombre AS localidad
+          FROM SalaDeVenta s
+          JOIN Localidad l ON l.id_localidad = s.id_localidad
+         ORDER BY l.nombre, s.calle, s.numero_calle, s.id_sala
+        """
+    )
+
+
+def list_depositos() -> list[dict[str, Any]]:
+    return fetch_all(
+        """
+        SELECT id_deposito, nombre
+          FROM DepositoCentral
+         ORDER BY nombre, id_deposito
+        """
+    )

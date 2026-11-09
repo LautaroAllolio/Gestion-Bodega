@@ -11,10 +11,12 @@ def listar_vinos(
     q: str | None = Query(default=None, max_length=200),
     tipo: TipoVino | None = Query(default=None),
     bodega: str | None = Query(default=None, max_length=100),
+    cepa: str | None = Query(default=None, max_length=50),
+    anada: int | None = Query(default=None, ge=1900, le=2100),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=20, ge=1, le=100),
 ):
-    return repository.list_vinos(q, tipo, bodega, page, limit)
+    return repository.list_vinos(q, tipo, bodega, cepa, anada, page, limit)
 
 
 @router.post("", response_model=VinoDetailOut, status_code=status.HTTP_201_CREATED)

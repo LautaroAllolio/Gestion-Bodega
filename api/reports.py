@@ -1,6 +1,7 @@
 from typing import Any
 
-from .db import fetch_all
+from .db import fetch_all, fetch_one
+from .errors import NotFoundError
 
 
 def stock_total_por_vino() -> list[dict[str, Any]]:
@@ -160,4 +161,40 @@ def evolucion_mensual_ventas() -> list[dict[str, Any]]:
          GROUP BY date_trunc('month', cv.fecha)::date
          ORDER BY mes
         """
+    )
+
+
+def ventas_sala_ultimo_trimestre() -> list[dict[str, Any]]:
+    return fetch_all(
+        """
+        SELECT s.id_sala,
+               (s.calle || ' ' || s.numero_calle) AS sala,
+               COUNT(cv.nro_comprobante)::integer AS comprobantes,
+               COALESCE(SUM(cv.total), 0) AS total
+          FROM SalaDeVenta s
+          JOIN ComprobanteVenta cv ON cv.id_sala = s.id_sala
+         WHERE cv.fecha >= CURRENT_DATE - INTERVAL '3 months'
+         GROUP BY s.id_sala, s.calle, s.numero_calle
+         ORDER BY total DESC, s.id_sala
+        """
+    )
+
+
+def vinos_sin_stock_sala(id_sala: int) -> list[dict[str, Any]]:
+    if fetch_one(
+        "SELECT 1 FROM SalaDeVenta WHERE id_sala = %s", (id_sala,)
+    ) is None:
+        raise NotFoundError(f"No existe la sala {id_sala}")
+    return fetch_all(
+        """
+        SELECT v.codigo_vino, v.nombre_comercial, v.tipo,
+               COALESCE(ss.cantidad, 0) AS stock_sala
+          FROM Vino v
+          LEFT JOIN StockSala ss
+            ON ss.codigo_vino = v.codigo_vino
+           AND ss.id_sala = %s
+         WHERE COALESCE(ss.cantidad, 0) = 0
+         ORDER BY v.nombre_comercial, v.codigo_vino
+        """,
+        (id_sala,),
     )
