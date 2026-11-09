@@ -205,6 +205,114 @@ def test_transferencia_flujo(client: TestClient, seed: dict):
     assert repetida.json()["sqlstate"] == "P0001"
 
 
+def test_catalogos(client: TestClient):
+    for endpoint in [
+        "/catalogos/bodegas",
+        "/catalogos/cepas",
+        "/catalogos/maridajes",
+        "/catalogos/salas",
+        "/catalogos/depositos",
+    ]:
+        response = client.get(endpoint)
+        assert response.status_code == 200, endpoint
+        assert isinstance(response.json(), list), endpoint
+        assert response.json(), endpoint
+
+
+def test_filtros_vinos_por_cepa_y_anada(client: TestClient):
+    first = client.get("/vinos", params={"limit": 1}).json()["items"][0]
+    detail = client.get(f"/vinos/{first['codigo_vino']}").json()
+    cepa = detail["cepas"][0]["nombre"]
+    anada = detail["anada"]
+
+    response = client.get(
+        "/vinos", params={"cepa": cepa, "anada": anada, "limit": 100}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] >= 1
+    assert any(item["codigo_vino"] == first["codigo_vino"] for item in body["items"])
+
+
+def test_cotizacion_no_persiste(client: TestClient, seed: dict):
+    stock = seed["stock_sala"]
+    payload = {
+        "id_cliente": seed["id_cliente"],
+        "id_sala": stock["id_sala"],
+        "renglones": [{"codigo_vino": stock["codigo_vino"], "cantidad": 1}],
+    }
+    stock_antes = client.get(f"/vinos/{stock['codigo_vino']}").json()["stock_total"]
+
+    response = client.post("/comprobantes/cotizar", json=payload)
+    assert response.status_code == 200
+    body = response.json()
+    assert float(body["total"]) > 0
+    assert float(body["renglones"][0]["precio_unitario"]) > 0
+    assert client.get(f"/comprobantes/{body['nro_comprobante']}").status_code == 404
+
+    stock_despues = client.get(f"/vinos/{stock['codigo_vino']}").json()["stock_total"]
+    assert stock_despues == stock_antes
+
+
+def test_cotizacion_sin_stock(client: TestClient, seed: dict):
+    stock = seed["stock_sala"]
+    response = client.post(
+        "/comprobantes/cotizar",
+        json={
+            "id_cliente": seed["id_cliente"],
+            "id_sala": stock["id_sala"],
+            "renglones": [
+                {
+                    "codigo_vino": stock["codigo_vino"],
+                    "cantidad": stock["cantidad"] + 1000,
+                }
+            ],
+        },
+    )
+    assert response.status_code == 409
+    assert response.json()["sqlstate"] == "P0001"
+    assert "Stock insuficiente" in response.json()["detail"]
+
+
+def test_transferencias_listado(client: TestClient, seed: dict):
+    stock = seed["stock_deposito"]
+    created = client.post(
+        "/transferencias",
+        json={
+            "id_sala_solicitante": seed["id_sala"],
+            "id_deposito": stock["id_deposito"],
+        },
+    )
+    assert created.status_code == 201
+    nro = created.json()["nro_transferencia"]
+
+    response = client.get(
+        "/transferencias", params={"estado": "en_confeccion", "limit": 100}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] >= 1
+    assert any(item["nro_transferencia"] == nro for item in body["items"])
+    assert "renglones" not in body["items"][0]
+
+
+def test_reportes_s13_s14(client: TestClient, seed: dict):
+    response = client.get("/reportes/s13-ventas-sala-trimestre")
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+    response = client.get(
+        "/reportes/s14-vinos-sin-stock-sala", params={"id_sala": seed["id_sala"]}
+    )
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+    response = client.get(
+        "/reportes/s14-vinos-sin-stock-sala", params={"id_sala": 999999999}
+    )
+    assert response.status_code == 404
+
+
 def test_reportes_s1_s12(client: TestClient):
     endpoints = [
         "/reportes/s1-stock-total",

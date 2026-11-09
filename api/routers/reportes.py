@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from .. import reports
 
@@ -65,3 +65,13 @@ def s11_descuentos_clientes():
 @router.get("/s12-evolucion-mensual", response_model=list[dict[str, Any]])
 def s12_evolucion_mensual():
     return reports.evolucion_mensual_ventas()
+
+
+@router.get("/s13-ventas-sala-trimestre", response_model=list[dict[str, Any]])
+def s13_ventas_sala_trimestre():
+    return reports.ventas_sala_ultimo_trimestre()
+
+
+@router.get("/s14-vinos-sin-stock-sala", response_model=list[dict[str, Any]])
+def s14_vinos_sin_stock_sala(id_sala: int = Query(ge=1)):
+    return reports.vinos_sin_stock_sala(id_sala)
