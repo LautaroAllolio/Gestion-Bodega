@@ -1,0 +1,592 @@
+=== Etapa 5 - DML ejecutado sobre bodega_seed ===
+Fecha de ejecucion: 2026-11-09
+Dataset: db/dump_completo.sql.gz (base date 2026-11-01)
+Servidor: PostgreSQL 18.3 temporal
+Cada bloque corre dentro de BEGIN ... ROLLBACK; el dataset no queda modificado.
+
+=== consultas/update.sql (U1-U6) ===
+BEGIN
+ comprobantes | subtotal_global | descuento_global |  total_global  
+--------------+-----------------+------------------+----------------
+       150000 |  57052074439.00 |    8005278337.60 | 49046796101.40
+(1 fila)
+
+ comprobantes_desviados 
+------------------------
+                      0
+(1 fila)
+
+UPDATE 150000
+ comprobantes | subtotal_global | descuento_global |  total_global  
+--------------+-----------------+------------------+----------------
+       150000 |  57052074439.00 |    8005278337.60 | 49046796101.40
+(1 fila)
+
+ comprobantes_desviados 
+------------------------
+                      0
+(1 fila)
+
+ROLLBACK
+BEGIN
+ empleados_mas_5 | salario_promedio | masa_salarial 
+-----------------+------------------+---------------
+              89 |       1984474.01 |  176618187.00
+(1 fila)
+
+    cuit     |             nombre              | fecha_ingreso |  salario   
+-------------+---------------------------------+---------------+------------
+ 20140324974 | Bruno Valentin Garcia           | 2007-01-24    | 2875495.00
+ 34731614769 | Maite Emma Perez Romero         | 2007-05-24    | 2670678.00
+ 30531838617 | Augusto Rivero                  | 2007-09-15    | 2719962.00
+ 23742989151 | Santino Gabriel Francisco Perez | 2007-09-24    | 2450773.00
+ 23688519136 | Sr(a). Salvador Silva           | 2007-10-08    |  740395.00
+(5 filas)
+
+UPDATE 89
+ empleados_mas_5 | salario_promedio | masa_salarial 
+-----------------+------------------+---------------
+              89 |       2381368.81 |  211941824.40
+(1 fila)
+
+ salarios_invalidos 
+--------------------
+                  0
+(1 fila)
+
+ROLLBACK
+BEGIN
+ vinos_bodega | precio_min | precio_max | precio_total 
+--------------+------------+------------+--------------
+           29 |    7950.00 |   31570.00 |    507704.00
+(1 fila)
+
+ codigo_vino |   nombre_comercial    | precio_venta 
+-------------+-----------------------+--------------
+ V0002       | Sosa Blanco 0002      |     23583.00
+ V0024       | Torres Espumante 0024 |     27754.00
+ V0049       | Morales Tinto 0049    |     15957.00
+ V0056       | Romero Espumante 0056 |     12346.00
+ V0059       | Gutierrez Rosado 0059 |     16833.00
+(5 filas)
+
+ auditoria_antes 
+-----------------
+               1
+(1 fila)
+
+UPDATE 29
+ vinos_bodega | precio_min | precio_max | precio_total 
+--------------+------------+------------+--------------
+           29 |    8983.50 |   35674.10 |    573705.52
+(1 fila)
+
+ codigo_vino |   nombre_comercial    | precio_venta 
+-------------+-----------------------+--------------
+ V0002       | Sosa Blanco 0002      |     26648.79
+ V0024       | Torres Espumante 0024 |     31362.02
+ V0049       | Morales Tinto 0049    |     18031.41
+ V0056       | Romero Espumante 0056 |     13950.98
+ V0059       | Gutierrez Rosado 0059 |     19021.29
+(5 filas)
+
+ auditoria_despues 
+-------------------
+                30
+(1 fila)
+
+ precios_invalidos 
+-------------------
+                 0
+(1 fila)
+
+ROLLBACK
+BEGIN
+ id_sala |                   calle                    | dia_cierre 
+---------+--------------------------------------------+------------
+       5 | Calle Santa Fe                             | Miercoles
+       6 | Diagonal 3                                 | Miercoles
+       7 | Avenida San Ferando del Valle de Catamarca | Lunes
+      11 | Avenida 3                                  | Lunes
+(4 filas)
+
+UPDATE 4
+ id_sala |                   calle                    | dia_cierre 
+---------+--------------------------------------------+------------
+       5 | Calle Santa Fe                             | Lunes
+       6 | Diagonal 3                                 | Lunes
+       7 | Avenida San Ferando del Valle de Catamarca | Miercoles
+      11 | Avenida 3                                  | Miercoles
+(4 filas)
+
+ salas_con_dia_invalido 
+------------------------
+                      0
+(1 fila)
+
+ROLLBACK
+BEGIN
+ posicion | codigo_vino |   nombre_comercial    | botellas | precio_venta 
+----------+-------------+-----------------------+----------+--------------
+        1 | V0582       | Garcia Blanco 0582    |     4933 |     22723.00
+        2 | V0488       | Paz Espumante 0488    |     4937 |     21199.00
+        3 | V0480       | Mendez Espumante 0480 |     4970 |     18418.00
+        4 | V0327       | Juarez Rosado 0327    |     4994 |     12860.00
+        5 | V0356       | Gomez Espumante 0356  |     5014 |     24033.00
+        6 | V0419       | Rivero Rosado 0419    |     5047 |     13496.00
+        7 | V0103       | Vega Rosado 0103      |     5048 |     12927.00
+        8 | V0391       | Flores Rosado 0391    |     5051 |      9311.00
+        9 | V0162       | Coronel Blanco 0162   |     5069 |     21768.00
+       10 | V0169       | Ramirez Tinto 0169    |     5077 |     13872.00
+(10 filas)
+
+ auditoria_antes 
+-----------------
+               1
+(1 fila)
+
+UPDATE 10
+ posicion | codigo_vino |   nombre_comercial    | botellas | precio_venta 
+----------+-------------+-----------------------+----------+--------------
+        1 | V0582       | Garcia Blanco 0582    |     4933 |     19314.55
+        2 | V0488       | Paz Espumante 0488    |     4937 |     18019.15
+        3 | V0480       | Mendez Espumante 0480 |     4970 |     15655.30
+        4 | V0327       | Juarez Rosado 0327    |     4994 |     10931.00
+        5 | V0356       | Gomez Espumante 0356  |     5014 |     20428.05
+        6 | V0419       | Rivero Rosado 0419    |     5047 |     11471.60
+        7 | V0103       | Vega Rosado 0103      |     5048 |     10987.95
+        8 | V0391       | Flores Rosado 0391    |     5051 |      7914.35
+        9 | V0162       | Coronel Blanco 0162   |     5069 |     18502.80
+       10 | V0169       | Ramirez Tinto 0169    |     5077 |     11791.20
+(10 filas)
+
+ auditoria_despues 
+-------------------
+                11
+(1 fila)
+
+ precios_invalidos 
+-------------------
+                 0
+(1 fila)
+
+ROLLBACK
+BEGIN
+ exportadores_mas_3 | ya_con_35 | desc_min | desc_max 
+--------------------+-----------+----------+----------
+                405 |         0 |    30.00 |    30.00
+(1 fila)
+
+ id_cliente |      apellido      | nombre | descuento_porcentaje | permisos 
+------------+--------------------+--------+----------------------+----------
+         13 | Gonzalez-Gutierrez |        |                30.00 |        5
+        143 | Sanchez Inc        |        |                30.00 |        5
+        387 | Escobar-Garcia     |        |                30.00 |        5
+        405 | Flores-Mansilla    |        |                30.00 |        5
+        505 | Romero-Diaz        |        |                30.00 |        5
+(5 filas)
+
+UPDATE 405
+ exportadores_mas_3 | con_35 | desc_min | desc_max 
+--------------------+--------+----------+----------
+                405 |    405 |    35.00 |    35.00
+(1 fila)
+
+ descuentos_invalidos 
+----------------------
+                    0
+(1 fila)
+
+ROLLBACK
+
+
+=== consultas/insert.sql (I1-I6) ===
+BEGIN
+ id_transporte |               razon_social               | envios_ultimo_trimestre | ya_cubre_general_alvear 
+---------------+------------------------------------------+-------------------------+-------------------------
+            12 | Transporte Bustos, Gomez and Paz         |                       2 | f
+             2 | Transporte Martin-Vera                   |                       3 | f
+             9 | Transporte Vega, Ortiz and Caceres       |                       3 | f
+             3 | Transporte Leiva-Gutierrez               |                       4 | f
+             7 | Transporte Vega-Ramirez                  |                       4 | f
+            10 | Transporte Sanchez LLC                   |                       4 | t
+            13 | Transporte Herrera, Villalba and Ramirez |                       4 | f
+            14 | Transporte Martinez-Quiroga              |                       4 | f
+             5 | Transporte Torres-Gonzalez               |                       6 | f
+            17 | Transporte Carrizo, Gomez and Diaz       |                       6 | f
+             1 | Transporte Sosa, Navarro and Molina      |                       7 | f
+             4 | Transporte Morales-Ferreyra              |                       7 | f
+             8 | Transporte Hernandez and Sons            |                       7 | f
+            15 | Transporte Vazquez and Sons              |                       7 | f
+            18 | Transporte Sanchez, Morales and Garcia   |                       7 | f
+            11 | Transporte Perez Group                   |                       8 | f
+            16 | Transporte Ruiz, Duarte and Lopez        |                       8 | f
+             6 | Transporte Gomez, Medina and Rojas       |                       9 | f
+(18 filas)
+
+ id_transporte |      razon_social      |   localidad    
+---------------+------------------------+----------------
+            10 | Transporte Sanchez LLC | General Alvear
+(1 fila)
+
+INSERT 0 1
+ id_transporte |           razon_social           |   localidad    
+---------------+----------------------------------+----------------
+            10 | Transporte Sanchez LLC           | General Alvear
+            12 | Transporte Bustos, Gomez and Paz | General Alvear
+(2 filas)
+
+ROLLBACK
+BEGIN
+ tintos_ge_14 
+--------------
+           77
+(1 fila)
+
+ id_maridaje | nombre | temperatura_servicio 
+-------------+--------+----------------------
+(0 filas)
+
+INSERT 0 77
+ id_maridaje |      nombre      | temperatura_servicio | vinos_asociados 
+-------------+------------------+----------------------+-----------------
+           9 | cordero al disco |                 18.0 |              77
+(1 fila)
+
+ asociaciones_invalidas 
+------------------------
+                      0
+(1 fila)
+
+ROLLBACK
+BEGIN
+ id_cliente | apellido |   nombre   | tipo_cliente | descuento_porcentaje 
+------------+----------+------------+--------------+----------------------
+          1 | Lopez    | Valentina  | Socio        |                10.00
+(1 fila)
+
+ id_sala | codigo_vino | cantidad 
+---------+-------------+----------
+       1 | V0209       |      800
+       1 | V0317       |      794
+       1 | V0558       |      790
+(3 filas)
+
+DROP TABLE
+CREATE TABLE
+INSERT 0 1
+INSERT 0 3
+ nro_comprobante |   fecha    | id_cliente | id_sala | subtotal | descuento |  total   | total_calculado | control 
+-----------------+------------+------------+---------+----------+-----------+----------+-----------------+---------
+          150001 | 2026-11-09 |          1 |       1 | 66873.00 |   6687.30 | 60185.70 |        60185.70 | OK
+(1 fila)
+
+ nro_comprobante | codigo_vino | nombre_comercial  | cantidad | precio_unitario | descuento_aplicado | subtotal 
+-----------------+-------------+-------------------+----------+-----------------+--------------------+----------
+          150001 | V0209       | Diaz Tinto 0209   |        1 |        29363.00 |              10.00 | 26426.70
+          150001 | V0317       | Rivero Tinto 0317 |        1 |        25557.00 |              10.00 | 23001.30
+          150001 | V0558       | Rios Blanco 0558  |        1 |        11953.00 |              10.00 | 10757.70
+(3 filas)
+
+ id_sala | codigo_vino | cantidad 
+---------+-------------+----------
+       1 | V0209       |      799
+       1 | V0317       |      793
+       1 | V0558       |      789
+(3 filas)
+
+ROLLBACK
+BEGIN
+ bodegas_con_cuit 
+------------------
+                0
+(1 fila)
+
+    cuit     |  razon_social   |  calle_bodega  | num_calle_bodega 
+-------------+-----------------+----------------+------------------
+ 30999999991 | Bodega Nueva 21 | Calle Ficticia | 123
+(1 fila)
+
+INSERT 0 1
+    cuit     |  razon_social   |  calle_bodega  | num_calle_bodega 
+-------------+-----------------+----------------+------------------
+ 30999999991 | Bodega Nueva 21 | Calle Ficticia | 123
+(1 fila)
+
+ROLLBACK
+BEGIN
+ salas_actuales | max_id_sala 
+----------------+-------------
+             20 |          20
+(1 fila)
+
+ id_localidad |   nombre   | provincia 
+--------------+------------+-----------
+            1 | San Rafael | Mendoza
+(1 fila)
+
+ id_sala |    calle    | dia_cierre | id_localidad | numero_calle 
+---------+-------------+------------+--------------+--------------
+      21 | Calle Nueva | Viernes    |            1 |          123
+(1 fila)
+
+INSERT 0 1
+ id_sala |    calle    | dia_cierre | id_localidad | numero_calle 
+---------+-------------+------------+--------------+--------------
+      21 | Calle Nueva | Viernes    |            1 |          123
+(1 fila)
+
+ROLLBACK
+BEGIN
+ codigo_vino |  nombre_comercial  | tipo  | presentacion_ml | graduacion_alcoholica | cuit_bodega |      bodega      
+-------------+--------------------+-------+-----------------+-----------------------+-------------+------------------
+ V0017       | Vazquez Tinto 0017 | Tinto |             750 |                 14.94 | 33655765404 | Bodega Acosta 03
+(1 fila)
+
+ id_transporte |            razon_social             
+---------------+-------------------------------------
+             1 | Transporte Sosa, Navarro and Molina
+(1 fila)
+
+ id_deposito |      nombre      
+-------------+------------------
+           1 | Depósito Central
+(1 fila)
+
+ ingresos_actuales | max_id_ingreso 
+-------------------+----------------
+              2000 |           2000
+(1 fila)
+
+DROP TABLE
+CREATE TABLE
+INSERT 0 1
+INSERT 0 1
+ id_ingreso |   fecha    |    estado     | id_transporte | cuit_bodega | id_deposito | codigo_vino | cantidad_botellas 
+------------+------------+---------------+---------------+-------------+-------------+-------------+-------------------
+       2001 | 2026-11-09 | en_confeccion |             1 | 33655765404 |           1 | V0017       |               120
+(1 fila)
+
+ROLLBACK
+
+
+=== consultas/delete.sql (D1-D6) ===
+BEGIN
+DROP TABLE
+CREATE TABLE
+INSERT 0 36991
+ comprobantes_a_borrar | clientes_socios | importe_total  | fecha_min  | fecha_max  
+-----------------------+-----------------+----------------+------------+------------
+                 36991 |           11863 | 12690644854.50 | 2019-11-03 | 2021-11-08
+(1 fila)
+
+ renglones_a_borrar 
+--------------------
+             125818
+(1 fila)
+
+DELETE 36991
+ comprobantes_restantes 
+------------------------
+                      0
+(1 fila)
+
+ renglones_restantes 
+---------------------
+                   0
+(1 fila)
+
+ comprobantes_totales 
+----------------------
+               113009
+(1 fila)
+
+ renglones_totales 
+-------------------
+            384564
+(1 fila)
+
+ROLLBACK
+BEGIN
+ id_cepa |       nombre       |  tipo  | vinos | parcelas | borrable 
+---------+--------------------+--------+-------+----------+----------
+       1 | Malbec             | Tinta  |    55 |       89 | NO
+       2 | Cabernet Sauvignon | Tinta  |    72 |      104 | NO
+       3 | Merlot             | Tinta  |    61 |      110 | NO
+       4 | Syrah              | Tinta  |    72 |       84 | NO
+       5 | Bonarda            | Tinta  |    63 |      109 | NO
+       6 | Tempranillo        | Tinta  |    55 |       97 | NO
+       7 | Pinot Noir         | Tinta  |    65 |      103 | NO
+       8 | Chardonnay         | Blanca |    86 |      108 | NO
+       9 | Sauvignon Blanc    | Blanca |    84 |       96 | NO
+      10 | Torrontés          | Blanca |    99 |        0 | NO
+      11 | Chenin Blanc       | Blanca |    90 |        0 | NO
+      12 | Semillón           | Blanca |    78 |        0 | NO
+(12 filas)
+
+DELETE 0
+ cepas_restantes 
+-----------------
+              12
+(1 fila)
+
+ cepas_borrables_restantes 
+---------------------------
+                         0
+(1 fila)
+
+ROLLBACK
+BEGIN
+    cuit     |               nombre                | fecha_ingreso | antiguedad | id_sala |   calle    | id_localidad |   localidad   | menos_2 
+-------------+-------------------------------------+---------------+------------+---------+------------+--------------+---------------+---------
+ 23168072104 | Julieta Ruiz Campos                 | 2013-01-19    |         13 |       4 | Av. Paraná |            4 | Luján de Cuyo | NO
+ 30567085690 | Constantino Benicio Alvarez         | 2021-09-13    |          5 |       4 | Av. Paraná |            4 | Luján de Cuyo | NO
+ 34861851429 | Gonzalo Agustin Moyano              | 2023-08-18    |          3 |       4 | Av. Paraná |            4 | Luján de Cuyo | NO
+ 27782447837 | Simon Flores Acosta                 | 2025-12-07    |          0 |       4 | Av. Paraná |            4 | Luján de Cuyo | SI
+ 30382664465 | Lautaro Nicolas Benjamin Rodriguez  | 2026-05-06    |          0 |       4 | Av. Paraná |            4 | Luján de Cuyo | SI
+ 30329481596 | Juan Ignacio Martina Garcia Sanchez | 2026-08-05    |          0 |       4 | Av. Paraná |            4 | Luján de Cuyo | SI
+(6 filas)
+
+DELETE 3
+ empleados_sala_4 
+------------------
+                3
+(1 fila)
+
+ empleados_menos_2_restantes 
+-----------------------------
+                           0
+(1 fila)
+
+ localidades_encargado_afectadas 
+---------------------------------
+                               0
+(1 fila)
+
+ROLLBACK
+BEGIN
+DROP TABLE
+CREATE TABLE
+INSERT 0 556
+ socios_a_borrar 
+-----------------
+             556
+(1 fila)
+
+ filas_socioclub_a_borrar 
+--------------------------
+                      556
+(1 fila)
+
+ id_cliente | apellido  |      nombre       | fecha_alta | id_localidad 
+------------+-----------+-------------------+------------+--------------
+       4040 | Rodriguez | Benjamin Ezequiel | 2018-11-03 |           10
+       8090 | Lopez     | Milagros          | 2018-11-04 |            3
+      10440 | Toledo    | Juan Cruz         | 2018-11-08 |           14
+      15030 | Flores    | Lara              | 2018-11-11 |            2
+      18030 | Pereyra   | Dante             | 2018-11-13 |            8
+(5 filas)
+
+DELETE 556
+ clientes_restantes 
+--------------------
+                  0
+(1 fila)
+
+ socioclub_restantes 
+---------------------
+                   0
+(1 fila)
+
+ comprobantes_de_esos_clientes 
+-------------------------------
+                             0
+(1 fila)
+
+ socios_totales 
+----------------
+          13460
+(1 fila)
+
+ROLLBACK
+BEGIN
+DROP TABLE
+CREATE TABLE
+INSERT 0 1392
+ ingresos_a_borrar | transportistas | bodegas | fecha_min  | fecha_max  
+-------------------+----------------+---------+------------+------------
+              1392 |             18 |      20 | 2021-11-02 | 2025-11-08
+(1 fila)
+
+ renglones_a_borrar | botellas 
+--------------------+----------
+               4937 |  1498260
+(1 fila)
+
+DELETE 1392
+ ingresos_restantes 
+--------------------
+                  0
+(1 fila)
+
+ renglones_restantes 
+---------------------
+                   0
+(1 fila)
+
+ ingresos_totales 
+------------------
+              608
+(1 fila)
+
+ renglones_totales 
+-------------------
+              2188
+(1 fila)
+
+ROLLBACK
+BEGIN
+DROP TABLE
+CREATE TABLE
+INSERT 0 88
+ socios_a_borrar 
+-----------------
+              88
+(1 fila)
+
+ filas_socioclub_a_borrar 
+--------------------------
+                       88
+(1 fila)
+
+ id_cliente | apellido |    nombre     | fecha_alta | id_localidad 
+------------+----------+---------------+------------+--------------
+        150 | Gonzalez | Gino          | 2026-05-25 |            1
+        390 | Farias   | Juan Bautista | 2019-06-07 |            1
+        620 | Lopez    | Luca          | 2026-03-12 |            1
+        690 | Medina   | Valentin      | 2020-05-03 |            1
+        740 | Romero   | Lautaro       | 2020-11-07 |            1
+(5 filas)
+
+DELETE 88
+ clientes_restantes 
+--------------------
+                  0
+(1 fila)
+
+ socioclub_restantes 
+---------------------
+                   0
+(1 fila)
+
+ comprobantes_de_esos_clientes 
+-------------------------------
+                             0
+(1 fila)
+
+ socios_totales 
+----------------
+          13928
+(1 fila)
+
+ROLLBACK

@@ -1,0 +1,357 @@
+=== S9 - ficha de vino V0017 ===
+BEGIN
+                                                                          QUERY PLAN                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Nested Loop Left Join  (cost=21.87..105.57 rows=1 width=169) (actual time=1.288..1.294 rows=1.00 loops=1)
+   Buffers: shared hit=43
+   ->  Nested Loop Left Join  (cost=11.82..95.48 rows=1 width=129) (actual time=1.167..1.172 rows=1.00 loops=1)
+         Buffers: shared hit=35
+         ->  Nested Loop Left Join  (cost=0.55..84.12 rows=1 width=97) (actual time=0.934..0.937 rows=1.00 loops=1)
+               Buffers: shared hit=28
+               ->  Nested Loop Left Join  (cost=0.55..29.58 rows=1 width=95) (actual time=0.533..0.535 rows=1.00 loops=1)
+                     Buffers: shared hit=11
+                     ->  Nested Loop  (cost=0.55..18.05 rows=1 width=87) (actual time=0.384..0.386 rows=1.00 loops=1)
+                           Join Filter: ((b.cuit)::text = (v.cuit_bodega)::text)
+                           Rows Removed by Join Filter: 2
+                           Buffers: shared hit=7
+                           ->  Nested Loop  (cost=0.55..16.60 rows=1 width=70) (actual time=0.344..0.345 rows=1.00 loops=1)
+                                 Buffers: shared hit=6
+                                 ->  Index Scan using pk_vino on vino v  (cost=0.28..8.29 rows=1 width=64) (actual time=0.087..0.088 rows=1.00 loops=1)
+                                       Index Cond: ((codigo_vino)::text = 'V0017'::text)
+                                       Index Searches: 1
+                                       Buffers: shared hit=3
+                                 ->  Index Only Scan using pk_vino on vino v_1  (cost=0.28..8.29 rows=1 width=6) (actual time=0.248..0.249 rows=1.00 loops=1)
+                                       Index Cond: (codigo_vino = 'V0017'::text)
+                                       Heap Fetches: 1
+                                       Index Searches: 1
+                                       Buffers: shared hit=3
+                           ->  Seq Scan on bodega b  (cost=0.00..1.20 rows=20 width=29) (actual time=0.037..0.037 rows=3.00 loops=1)
+                                 Buffers: shared hit=1
+                     ->  GroupAggregate  (cost=0.00..11.51 rows=1 width=14) (actual time=0.147..0.148 rows=1.00 loops=1)
+                           Buffers: shared hit=4
+                           ->  Seq Scan on stockdeposito  (cost=0.00..11.50 rows=1 width=10) (actual time=0.040..0.136 rows=1.00 loops=1)
+                                 Filter: ((codigo_vino)::text = 'V0017'::text)
+                                 Rows Removed by Filter: 599
+                                 Buffers: shared hit=4
+               ->  GroupAggregate  (cost=0.00..54.52 rows=1 width=14) (actual time=0.401..0.401 rows=1.00 loops=1)
+                     Buffers: shared hit=17
+                     ->  Seq Scan on stocksala  (cost=0.00..54.50 rows=4 width=10) (actual time=0.095..0.399 rows=2.00 loops=1)
+                           Filter: ((codigo_vino)::text = 'V0017'::text)
+                           Rows Removed by Filter: 2998
+                           Buffers: shared hit=17
+         ->  GroupAggregate  (cost=11.27..11.34 rows=1 width=38) (actual time=0.232..0.233 rows=1.00 loops=1)
+               Buffers: shared hit=7
+               ->  Sort  (cost=11.27..11.28 rows=3 width=21) (actual time=0.217..0.219 rows=3.00 loops=1)
+                     Sort Key: vc.porcentaje_corte DESC
+                     Sort Method: quicksort  Memory: 25kB
+                     Buffers: shared hit=7
+                     ->  Hash Join  (cost=5.57..11.25 rows=3 width=21) (actual time=0.083..0.086 rows=3.00 loops=1)
+                           Hash Cond: (vc.id_cepa = c.id_cepa)
+                           Buffers: shared hit=4
+                           ->  Bitmap Heap Scan on vinocepa vc  (cost=4.30..9.97 rows=3 width=15) (actual time=0.041..0.041 rows=3.00 loops=1)
+                                 Recheck Cond: ((codigo_vino)::text = 'V0017'::text)
+                                 Heap Blocks: exact=1
+                                 Buffers: shared hit=3
+                                 ->  Bitmap Index Scan on pk_vinocepa  (cost=0.00..4.30 rows=3 width=0) (actual time=0.017..0.017 rows=3.00 loops=1)
+                                       Index Cond: ((codigo_vino)::text = 'V0017'::text)
+                                       Index Searches: 1
+                                       Buffers: shared hit=2
+                           ->  Hash  (cost=1.12..1.12 rows=12 width=14) (actual time=0.024..0.024 rows=12.00 loops=1)
+                                 Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                 Buffers: shared hit=1
+                                 ->  Seq Scan on cepa c  (cost=0.00..1.12 rows=12 width=14) (actual time=0.016..0.017 rows=12.00 loops=1)
+                                       Buffers: shared hit=1
+   ->  GroupAggregate  (cost=10.05..10.07 rows=1 width=38) (actual time=0.118..0.118 rows=1.00 loops=1)
+         Buffers: shared hit=8
+         ->  Sort  (cost=10.05..10.05 rows=2 width=21) (actual time=0.115..0.116 rows=2.00 loops=1)
+               Sort Key: m.nombre
+               Sort Method: quicksort  Memory: 25kB
+               Buffers: shared hit=8
+               ->  Hash Join  (cost=5.47..10.04 rows=2 width=21) (actual time=0.080..0.083 rows=2.00 loops=1)
+                     Hash Cond: (vm.id_maridaje = m.id_maridaje)
+                     Buffers: shared hit=5
+                     ->  Bitmap Heap Scan on vinomaridaje vm  (cost=4.29..8.85 rows=2 width=10) (actual time=0.047..0.049 rows=2.00 loops=1)
+                           Recheck Cond: ((codigo_vino)::text = 'V0017'::text)
+                           Heap Blocks: exact=2
+                           Buffers: shared hit=4
+                           ->  Bitmap Index Scan on pk_vinomaridaje  (cost=0.00..4.29 rows=2 width=0) (actual time=0.026..0.026 rows=3.00 loops=1)
+                                 Index Cond: ((codigo_vino)::text = 'V0017'::text)
+                                 Index Searches: 1
+                                 Buffers: shared hit=2
+                     ->  Hash  (cost=1.08..1.08 rows=8 width=19) (actual time=0.024..0.024 rows=8.00 loops=1)
+                           Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                           Buffers: shared hit=1
+                           ->  Seq Scan on maridaje m  (cost=0.00..1.08 rows=8 width=19) (actual time=0.015..0.017 rows=8.00 loops=1)
+                                 Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=484
+ Planning Time: 37.436 ms
+ Execution Time: 1.614 ms
+(85 filas)
+
+ROLLBACK
+=== S10 - rendimiento por parcela y campania ===
+BEGIN
+                                                                         QUERY PLAN                                                                          
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=120380.38..120381.88 rows=600 width=167) (actual time=3343.651..3343.815 rows=4000.00 loops=1)
+   Sort Key: f.nombre, r.campania, r.nro_parcela
+   Sort Method: quicksort  Memory: 386kB
+   Buffers: shared hit=5720
+   CTE rendimiento
+     ->  HashAggregate  (cost=177.80..237.80 rows=4000 width=82) (actual time=13.691..16.709 rows=4000.00 loops=1)
+           Group Key: l.id_finca, l.nro_parcela, l.campania, p.superficie
+           Batches: 1  Memory Usage: 1681kB
+           Buffers: shared hit=5716
+           ->  Nested Loop  (cost=0.29..127.80 rows=4000 width=24) (actual time=0.085..9.037 rows=4000.00 loops=1)
+                 Buffers: shared hit=5716
+                 ->  Seq Scan on parcela p  (cost=0.00..15.00 rows=900 width=14) (actual time=0.035..0.194 rows=900.00 loops=1)
+                       Buffers: shared hit=6
+                 ->  Memoize  (cost=0.29..0.63 rows=4 width=18) (actual time=0.004..0.009 rows=4.44 loops=900)
+                       Cache Key: p.id_finca, p.nro_parcela
+                       Cache Mode: logical
+                       Hits: 0  Misses: 900  Evictions: 0  Overflows: 0  Memory Usage: 263kB
+                       Buffers: shared hit=5710
+                       ->  Index Scan using lote_uva_campania on loteuva l  (cost=0.28..0.62 rows=4 width=18) (actual time=0.003..0.006 rows=4.44 loops=900)
+                             Index Cond: ((id_finca = p.id_finca) AND (nro_parcela = p.nro_parcela))
+                             Index Searches: 900
+                             Buffers: shared hit=5710
+   ->  Hash Join  (cost=1.68..120114.90 rows=600 width=167) (actual time=19.018..3332.243 rows=4000.00 loops=1)
+         Hash Cond: (r.id_finca = f.id_finca)
+         Buffers: shared hit=5717
+         ->  CTE Scan on rendimiento r  (cost=0.00..80.00 rows=4000 width=92) (actual time=13.696..14.845 rows=4000.00 loops=1)
+               Storage: Memory  Maximum Storage: 282kB
+               Buffers: shared hit=5716
+         ->  Hash  (cost=1.30..1.30 rows=30 width=19) (actual time=0.077..0.078 rows=30.00 loops=1)
+               Buckets: 1024  Batches: 1  Memory Usage: 10kB
+               Buffers: shared hit=1
+               ->  Seq Scan on finca f  (cost=0.00..1.30 rows=30 width=19) (actual time=0.063..0.067 rows=30.00 loops=1)
+                     Buffers: shared hit=1
+         SubPlan 2
+           ->  Aggregate  (cost=100.00..100.02 rows=1 width=32) (actual time=0.412..0.412 rows=1.00 loops=4000)
+                 ->  CTE Scan on rendimiento r2  (cost=0.00..100.00 rows=1 width=32) (actual time=0.015..0.406 rows=26.77 loops=4000)
+                       Filter: ((id_finca = r.id_finca) AND (campania = r.campania))
+                       Rows Removed by Filter: 3973
+                       Storage: Memory  Maximum Storage: 282kB
+         SubPlan 3
+           ->  Aggregate  (cost=100.00..100.02 rows=1 width=32) (actual time=0.412..0.412 rows=1.00 loops=4000)
+                 ->  CTE Scan on rendimiento r2_1  (cost=0.00..100.00 rows=1 width=32) (actual time=0.015..0.405 rows=26.77 loops=4000)
+                       Filter: ((id_finca = r.id_finca) AND (campania = r.campania))
+                       Rows Removed by Filter: 3973
+                       Storage: Memory  Maximum Storage: 282kB
+ Planning:
+   Buffers: shared hit=130
+ Planning Time: 16.456 ms
+ Execution Time: 3344.769 ms
+(49 filas)
+
+ROLLBACK
+=== S11a - ranking de vinos por sala ===
+BEGIN
+                                                                                           QUERY PLAN                                                                                            
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Incremental Sort  (cost=16512.72..16584.57 rows=1200 width=65) (actual time=235.834..252.140 rows=12000.00 loops=1)
+   Sort Key: s.id_sala, (rank() OVER w1), dv.codigo_vino
+   Presorted Key: s.id_sala
+   Full-sort Groups: 20  Sort Method: quicksort  Average Memory: 30kB  Peak Memory: 30kB
+   Pre-sorted Groups: 20  Sort Method: quicksort  Average Memory: 77kB  Peak Memory: 77kB
+   Buffers: shared hit=5681
+   ->  WindowAgg  (cost=16509.75..16533.73 rows=1200 width=65) (actual time=235.091..245.732 rows=12000.00 loops=1)
+         Window: w1 AS (PARTITION BY cv.id_sala ORDER BY (sum(dv.cantidad)) ROWS UNBOUNDED PRECEDING)
+         Storage: Memory  Maximum Storage: 17kB
+         Buffers: shared hit=5678
+         ->  Sort  (cost=16509.73..16512.73 rows=1200 width=57) (actual time=235.044..238.840 rows=12000.00 loops=1)
+               Sort Key: cv.id_sala, (sum(dv.cantidad)) DESC
+               Sort Method: quicksort  Memory: 1303kB
+               Buffers: shared hit=5678
+               ->  Hash Join  (cost=16173.02..16448.36 rows=1200 width=57) (actual time=221.016..230.661 rows=12000.00 loops=1)
+                     Hash Cond: ((dv.codigo_vino)::text = (v.codigo_vino)::text)
+                     Buffers: shared hit=5678
+                     ->  Hash Join  (cost=16151.52..16423.68 rows=1200 width=38) (actual time=220.755..227.555 rows=12000.00 loops=1)
+                           Hash Cond: (cv.id_sala = s.id_sala)
+                           Buffers: shared hit=5670
+                           ->  Finalize HashAggregate  (cost=16150.07..16270.07 rows=12000 width=18) (actual time=220.711..225.121 rows=12000.00 loops=1)
+                                 Group Key: cv.id_sala, dv.codigo_vino
+                                 Batches: 1  Memory Usage: 1049kB
+                                 Buffers: shared hit=5669
+                                 ->  Gather  (cost=12934.07..15934.07 rows=28800 width=18) (actual time=201.543..210.206 rows=36000.00 loops=1)
+                                       Workers Planned: 2
+                                       Workers Launched: 2
+                                       Buffers: shared hit=5669
+                                       ->  Partial HashAggregate  (cost=11934.07..12054.07 rows=12000 width=18) (actual time=157.727..160.286 rows=12000.00 loops=3)
+                                             Group Key: cv.id_sala, dv.codigo_vino
+                                             Batches: 1  Memory Usage: 1049kB
+                                             Buffers: shared hit=5669
+                                             Worker 0:  Batches: 1  Memory Usage: 1049kB
+                                             Worker 1:  Batches: 1  Memory Usage: 1049kB
+                                             ->  Parallel Hash Join  (cost=3366.29..10339.12 rows=212659 width=14) (actual time=26.095..95.109 rows=170127.33 loops=3)
+                                                   Hash Cond: (dv.nro_comprobante = cv.nro_comprobante)
+                                                   Buffers: shared hit=5669
+                                                   ->  Parallel Seq Scan on detalleventa dv  (cost=0.00..6414.59 rows=212659 width=14) (actual time=0.014..15.287 rows=170127.33 loops=3)
+                                                         Buffers: shared hit=4288
+                                                   ->  Parallel Hash  (cost=2263.35..2263.35 rows=88235 width=8) (actual time=25.697..25.698 rows=50000.00 loops=3)
+                                                         Buckets: 262144  Batches: 1  Memory Usage: 7936kB
+                                                         Buffers: shared hit=1381
+                                                         ->  Parallel Seq Scan on comprobanteventa cv  (cost=0.00..2263.35 rows=88235 width=8) (actual time=0.018..13.506 rows=75000.00 loops=2)
+                                                               Buffers: shared hit=1381
+                           ->  Hash  (cost=1.20..1.20 rows=20 width=20) (actual time=0.031..0.032 rows=20.00 loops=1)
+                                 Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                                 Buffers: shared hit=1
+                                 ->  Seq Scan on saladeventa s  (cost=0.00..1.20 rows=20 width=20) (actual time=0.021..0.024 rows=20.00 loops=1)
+                                       Buffers: shared hit=1
+                     ->  Hash  (cost=14.00..14.00 rows=600 width=25) (actual time=0.250..0.250 rows=600.00 loops=1)
+                           Buckets: 1024  Batches: 1  Memory Usage: 42kB
+                           Buffers: shared hit=8
+                           ->  Seq Scan on vino v  (cost=0.00..14.00 rows=600 width=25) (actual time=0.042..0.136 rows=600.00 loops=1)
+                                 Buffers: shared hit=8
+ Planning:
+   Buffers: shared hit=127
+ Planning Time: 8.549 ms
+ Execution Time: 253.965 ms
+(58 filas)
+
+ROLLBACK
+=== S11b - ventas acumuladas mensuales por sala ===
+BEGIN
+                                                                                  QUERY PLAN                                                                                   
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ WindowAgg  (cost=5701.81..5731.79 rows=1500 width=92) (actual time=118.471..119.691 rows=1700.00 loops=1)
+   Window: w1 AS (PARTITION BY cv.id_sala ORDER BY ((date_trunc('month'::text, (cv.fecha)::timestamp with time zone))::date) ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+   Storage: Memory  Maximum Storage: 17kB
+   Buffers: shared hit=1385
+   ->  Sort  (cost=5701.79..5705.54 rows=1500 width=60) (actual time=118.460..118.534 rows=1700.00 loops=1)
+         Sort Key: cv.id_sala, ((date_trunc('month'::text, (cv.fecha)::timestamp with time zone))::date)
+         Sort Method: quicksort  Memory: 143kB
+         Buffers: shared hit=1385
+         ->  Hash Join  (cost=5132.45..5622.66 rows=1500 width=60) (actual time=116.982..117.834 rows=1700.00 loops=1)
+               Hash Cond: (cv.id_sala = s.id_sala)
+               Buffers: shared hit=1382
+               ->  HashAggregate  (cost=5131.00..5431.00 rows=15000 width=40) (actual time=116.950..117.454 rows=1700.00 loops=1)
+                     Group Key: cv.id_sala, (date_trunc('month'::text, (cv.fecha)::timestamp with time zone))::date
+                     Batches: 1  Memory Usage: 1425kB
+                     Buffers: shared hit=1381
+                     ->  Seq Scan on comprobanteventa cv  (cost=0.00..4006.00 rows=150000 width=16) (actual time=0.014..65.226 rows=150000.00 loops=1)
+                           Buffers: shared hit=1381
+               ->  Hash  (cost=1.20..1.20 rows=20 width=20) (actual time=0.023..0.024 rows=20.00 loops=1)
+                     Buckets: 1024  Batches: 1  Memory Usage: 10kB
+                     Buffers: shared hit=1
+                     ->  Seq Scan on saladeventa s  (cost=0.00..1.20 rows=20 width=20) (actual time=0.014..0.016 rows=20.00 loops=1)
+                           Buffers: shared hit=1
+ Planning:
+   Buffers: shared hit=28
+ Planning Time: 0.364 ms
+ Execution Time: 120.150 ms
+(26 filas)
+
+ROLLBACK
+=== S12a - clientes que compraron todos los vinos de una bodega ===
+BEGIN
+                                                                                QUERY PLAN                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Merge Anti Join  (cost=16235.11..33178.30 rows=1 width=22) (actual time=312.988..312.994 rows=0.00 loops=1)
+   Merge Cond: (c.id_cliente = c_1.id_cliente)
+   Buffers: shared hit=6395
+   CTE vinos_bodega
+     ->  Seq Scan on vino  (cost=0.00..15.50 rows=17 width=6) (actual time=0.021..0.105 rows=17.00 loops=1)
+           Filter: ((cuit_bodega)::text = '34122036849'::text)
+           Rows Removed by Filter: 583
+           Buffers: shared hit=8
+   ->  Index Scan using pk_cliente on cliente c  (cost=0.29..852.13 rows=20456 width=22) (actual time=0.017..5.938 rows=20000.00 loops=1)
+         Index Searches: 1
+         Buffers: shared hit=363
+   ->  Merge Anti Join  (cost=16219.32..28999.36 rows=260814 width=4) (actual time=133.520..287.034 rows=325792.00 loops=1)
+         Merge Cond: (c_1.id_cliente = cv.id_cliente)
+         Join Filter: ((dv.codigo_vino)::text = (vb.codigo_vino)::text)
+         Rows Removed by Join Filter: 221360
+         Buffers: shared hit=6032
+         ->  Nested Loop  (cost=0.29..7500.34 rows=347752 width=122) (actual time=0.040..69.249 rows=339984.00 loops=1)
+               Buffers: shared hit=357
+               ->  Index Only Scan using pk_cliente on cliente c_1  (cost=0.29..545.13 rows=20456 width=4) (actual time=0.016..5.387 rows=20000.00 loops=1)
+                     Heap Fetches: 19413
+                     Index Searches: 1
+                     Buffers: shared hit=355
+               ->  CTE Scan on vinos_bodega vb  (cost=0.00..0.34 rows=17 width=118) (actual time=0.000..0.001 rows=17.00 loops=20000)
+                     Storage: Memory  Maximum Storage: 17kB
+                     Buffers: shared hit=2
+         ->  Materialize  (cost=16219.03..16363.64 rows=14461 width=10) (actual time=133.464..149.258 rows=222120.00 loops=1)
+               Storage: Memory  Maximum Storage: 17kB
+               Buffers: shared hit=5675
+               ->  Unique  (cost=16219.03..16327.49 rows=14461 width=10) (actual time=133.458..139.138 rows=14192.00 loops=1)
+                     Buffers: shared hit=5675
+                     ->  Sort  (cost=16219.03..16255.19 rows=14461 width=10) (actual time=133.454..136.281 rows=14537.00 loops=1)
+                           Sort Key: cv.id_cliente, dv.codigo_vino
+                           Sort Method: quicksort  Memory: 839kB
+                           Buffers: shared hit=5675
+                           ->  Hash Join  (cost=11631.68..15219.79 rows=14461 width=10) (actual time=100.330..129.022 rows=14537.00 loops=1)
+                                 Hash Cond: (cv.nro_comprobante = dv.nro_comprobante)
+                                 Buffers: shared hit=5675
+                                 ->  Seq Scan on comprobanteventa cv  (cost=0.00..2881.00 rows=150000 width=8) (actual time=0.006..7.463 rows=150000.00 loops=1)
+                                       Buffers: shared hit=1381
+                                 ->  Hash  (cost=11450.91..11450.91 rows=14461 width=10) (actual time=100.262..100.265 rows=14537.00 loops=1)
+                                       Buckets: 16384  Batches: 1  Memory Usage: 753kB
+                                       Buffers: shared hit=4294
+                                       ->  Hash Join  (cost=0.55..11450.91 rows=14461 width=10) (actual time=0.115..95.662 rows=14537.00 loops=1)
+                                             Hash Cond: ((dv.codigo_vino)::text = (vb_1.codigo_vino)::text)
+                                             Buffers: shared hit=4294
+                                             ->  Seq Scan on detalleventa dv  (cost=0.00..9391.82 rows=510382 width=10) (actual time=0.013..40.965 rows=510382.00 loops=1)
+                                                   Buffers: shared hit=4288
+                                             ->  Hash  (cost=0.34..0.34 rows=17 width=118) (actual time=0.092..0.093 rows=17.00 loops=1)
+                                                   Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                                   Buffers: shared hit=6
+                                                   ->  CTE Scan on vinos_bodega vb_1  (cost=0.00..0.34 rows=17 width=118) (actual time=0.000..0.087 rows=17.00 loops=1)
+                                                         Storage: Memory  Maximum Storage: 17kB
+                                                         Buffers: shared hit=6
+ Planning:
+   Buffers: shared hit=96
+ Planning Time: 3.085 ms
+ Execution Time: 313.336 ms
+(57 filas)
+
+ROLLBACK
+=== S12b - clientes que nunca compraron vino tinto ===
+BEGIN
+                                                                            QUERY PLAN                                                                            
+------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Sort  (cost=17367.62..17375.67 rows=3220 width=29) (actual time=246.905..246.992 rows=2088.00 loops=1)
+   Sort Key: c.id_cliente
+   Sort Method: quicksort  Memory: 195kB
+   Buffers: shared hit=5991
+   ->  Hash Anti Join  (cost=16556.17..17180.01 rows=3220 width=29) (actual time=238.801..246.322 rows=2088.00 loops=1)
+         Hash Cond: (c.id_cliente = cv.id_cliente)
+         Buffers: shared hit=5991
+         ->  Seq Scan on cliente c  (cost=0.00..518.56 rows=20456 width=29) (actual time=0.016..1.618 rows=20000.00 loops=1)
+               Buffers: shared hit=314
+         ->  Hash  (cost=16340.72..16340.72 rows=17236 width=4) (actual time=238.699..238.706 rows=17912.00 loops=1)
+               Buckets: 32768  Batches: 1  Memory Usage: 886kB
+               Buffers: shared hit=5677
+               ->  HashAggregate  (cost=16168.36..16340.72 rows=17236 width=4) (actual time=233.797..236.100 rows=17912.00 loops=1)
+                     Group Key: cv.id_cliente
+                     Batches: 1  Memory Usage: 1049kB
+                     Buffers: shared hit=5677
+                     ->  Hash Join  (cost=4773.38..15849.37 rows=127596 width=4) (actual time=49.449..196.371 rows=127960.00 loops=1)
+                           Hash Cond: (dv.nro_comprobante = cv.nro_comprobante)
+                           Buffers: shared hit=5677
+                           ->  Hash Join  (cost=17.38..10758.42 rows=127596 width=4) (actual time=0.116..105.250 rows=127960.00 loops=1)
+                                 Hash Cond: ((dv.codigo_vino)::text = (v.codigo_vino)::text)
+                                 Buffers: shared hit=4296
+                                 ->  Seq Scan on detalleventa dv  (cost=0.00..9391.82 rows=510382 width=10) (actual time=0.007..33.032 rows=510382.00 loops=1)
+                                       Buffers: shared hit=4288
+                                 ->  Hash  (cost=15.50..15.50 rows=150 width=6) (actual time=0.102..0.103 rows=150.00 loops=1)
+                                       Buckets: 1024  Batches: 1  Memory Usage: 14kB
+                                       Buffers: shared hit=8
+                                       ->  Seq Scan on vino v  (cost=0.00..15.50 rows=150 width=6) (actual time=0.010..0.082 rows=150.00 loops=1)
+                                             Filter: ((tipo)::text = 'Tinto'::text)
+                                             Rows Removed by Filter: 450
+                                             Buffers: shared hit=8
+                           ->  Hash  (cost=2881.00..2881.00 rows=150000 width=8) (actual time=48.742..48.743 rows=150000.00 loops=1)
+                                 Buckets: 262144  Batches: 1  Memory Usage: 7908kB
+                                 Buffers: shared hit=1381
+                                 ->  Seq Scan on comprobanteventa cv  (cost=0.00..2881.00 rows=150000 width=8) (actual time=0.014..16.015 rows=150000.00 loops=1)
+                                       Buffers: shared hit=1381
+ Planning:
+   Buffers: shared hit=27
+ Planning Time: 0.813 ms
+ Execution Time: 248.608 ms
+(40 filas)
+
+ROLLBACK

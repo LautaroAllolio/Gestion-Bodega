@@ -586,6 +586,93 @@ El volcado actual se regeneró con la versión corregida de `fn_descuento_client
 
 # Etapa 5
 
+## Alcance y método de prueba
+
+Los archivos de `consultas/` resuelven las consignas de modificación (`U1`–`U6`, `I1`–`I6`, `D1`–`D6`) y de consulta (`S1`–`S12`). Los DML se ejecutaron con `ON_ERROR_STOP=1` dentro de bloques `BEGIN ... ROLLBACK`, por lo que cada prueba partió del mismo dataset y no dejó cambios permanentes. Las pruebas se hicieron sobre `bodega_seed`, cargada desde `db/dump_completo.sql.gz`, con fecha base `2026-11-01`.
+
+La ejecución de evidencia se realizó el `2026-11-09` con PostgreSQL 18.3. Los comentarios de cabecera de `update.sql` para U2 y U3 quedaron desactualizados respecto del dump regenerado: la corrida real afectó 89 empleados y 29 vinos, respectivamente. No se modificaron los scripts; los valores de este informe son los observados en esa ejecución.
+
+Evidencias versionadas:
+
+- `consultas/salida_dml_local.txt`: salidas completas de U1–U6, I1–I6 y D1–D6.
+- `consultas/salida_select_local.txt`: salidas de S1–S12.
+- `consultas/explain_s9_s12.txt`: planes `EXPLAIN (ANALYZE, BUFFERS)` de S9–S12.
+
+## Modificación de datos (U1–U6)
+
+| Código | Operación | Filas | Resultado y controles |
+|---|---|---:|---|
+| U1 | Recalcular `ComprobanteVenta.total` con el descuento del cliente | 150.000 | Los totales globales no cambiaron porque el dataset ya cumplía RN-08; el control de desvíos dio 0. |
+| U2 | Aumentar 20 % el salario de empleados con más de 5 años de antigüedad | 89 | Salario promedio de los 89 afectados: 1.984.474,01 → 2.381.368,81; masa salarial: 176.618.187,00 → 211.941.824,40; 0 salarios inválidos. |
+| U3 | Aumentar 13 % el precio de los vinos de la bodega Ponce 01 (CUIT 34463830136) | 29 | `AuditoriaPrecio` pasó de 1 a 30 filas; 0 precios inválidos. |
+| U4 | Intercambiar los días de visita Lunes y Miércoles en las salas | 4 | 4 filas modificadas; 0 días inválidos. |
+| U5 | Aplicar 15 % de descuento a los 10 vinos menos vendidos | 10 | `AuditoriaPrecio` pasó de 1 a 11 filas; 0 precios inválidos. |
+| U6 | Aplicar 35 % de descuento a exportadores con más de 3 permisos | 405 | Antes: 405 exportadores con 30 %; después: 405 con 35 %; 0 descuentos inválidos. |
+
+Las actualizaciones masivas se resolvieron con expresiones de conjunto y CTE, sin cursores. U3 y U5 dispararon `trg_auditoria_precio`, que registra el precio anterior y el nuevo en `AuditoriaPrecio`; los controles posteriores verificaron que no se generaran precios nulos o no positivos.
+
+## Inserción de datos (I1–I6)
+
+| Código | Operación | Filas | Resultado y controles |
+|---|---|---:|---|
+| I1 | Agregar cobertura de un transportista en General Alvear | 1 | Se eligió el transportista 12, con 2 envíos en el último trimestre y sin cobertura previa; quedó con 2 localidades cubiertas. |
+| I2 | Crear el maridaje “cordero al disco” y asociarlo a tintos de 14 % o más | 1 + 77 | 1 maridaje nuevo y 77 asociaciones en `VinoMaridaje`; 0 asociaciones inválidas. |
+| I3 | Insertar un comprobante de venta con 3 renglones | 1 + 3 | Comprobante 150001: subtotal 66.873,00, descuento 6.687,30, total 60.185,70; el total coincide con `fn_total_comprobante`. El stock de los 3 vinos bajó en 1 botella. |
+| I4 | Insertar una bodega nueva | 1 | Bodega CUIT 30999999991 insertada; el control de duplicados dio 0. |
+| I5 | Insertar una sala nueva en San Rafael | 1 | Sala 21 creada; el máximo `id_sala` pasó de 20 a 21. |
+| I6 | Insertar un ingreso con su detalle | 1 + 1 | Ingreso 2001 para V0017, transportista 1, depósito 1, 120 botellas; estado `en_confeccion`; el máximo `id_ingreso` pasó de 2000 a 2001. |
+
+I3 e I6 ejercitan los triggers de negocio: el comprobante completa precio unitario, subtotal, descuento y total, y descuenta stock; el ingreso se registra con su detalle y conserva el estado inicial. I2 usa `ON CONFLICT DO NOTHING` sobre la clave de `VinoMaridaje` para que la asociación sea idempotente.
+
+## Borrado de datos (D1–D6)
+
+| Código | Operación | Filas | Resultado y controles |
+|---|---|---:|---|
+| D1 | Borrar comprobantes de socios con más de 5 años | 36.991 | Se eliminaron 125.818 renglones por `ON DELETE CASCADE`; comprobantes: 150.000 → 113.009; renglones: 510.382 → 384.564. |
+| D2 | Borrar cepas sin vinos asociados | 0 | Quedaron 12 cepas; las 12 están en uso, por lo que no hubo filas elegibles. |
+| D3 | Borrar empleados con menos de 2 años en la sala 4 (Luján de Cuyo) | 3 | Empleados de la sala: 6 → 3; 0 localidades quedaron con encargado eliminado. |
+| D4 | Borrar socios sin compras y con más de 5 años | 556 | Socios: 14.016 → 13.460; 0 socios quedaron sin compras. |
+| D5 | Borrar ingresos procesados con más de 1 año | 1.392 | Se eliminaron 4.937 renglones y 1.498.260 botellas por `ON DELETE CASCADE`; ingresos: 2.000 → 608; renglones: 7.125 → 2.188. |
+| D6 | Borrar socios sin compras de San Rafael | 88 | Socios: 14.016 → 13.928; 0 socios de San Rafael quedaron sin compras. |
+
+Cada bloque D es independiente y termina en `ROLLBACK`; por eso D4 y D6 parten de los 14.016 socios originales. D1, D4 y D5 dependen de acciones referenciales `ON DELETE CASCADE`; D3 usa `ON DELETE SET NULL` para el encargado de localidad, y el control confirmó que ninguna localidad quedó apuntando a un empleado borrado. D2 evita la violación de FK mediante `NOT EXISTS` sobre `VinoCepa`.
+
+## Consultas SELECT (S1–S12)
+
+| Código | Técnica | Resultado |
+|---|---|---|
+| S1 | `ROW_NUMBER()` sobre agregación | Ranking de los 10 vinos con más botellas vendidas. |
+| S2 | División relacional por cardinalidad | Vinos cuya cantidad de salas distintas iguala el total de salas. |
+| S3 | Filtro temporal y `COUNT(DISTINCT)` | Clientes por tipo que compraron en la sala 1 en los últimos 7 días. |
+| S4 | CTE, agregación y `LIMIT` | Top 5 de salas que más solicitaron V0155 en los últimos 15 días. |
+| S5 | CTE, `LEFT JOIN` y `MIN` | Salas con la menor cantidad de transferencias pendientes, incluyendo las de valor 0. |
+| S6 | Anti-join con `LEFT JOIN` y `COALESCE` | Vinos sin stock en la sala 1 pero con stock en el depósito central. |
+| S7 | CTE, agregación y orden con `LIMIT 1` | Transportista con mayor actividad en el último mes. |
+| S8 | Join, filtro temporal y `SUM` | Monto total vendido por sala en el último trimestre. |
+| S9 | CTE, `STRING_AGG` y vista de stock | Ficha completa del vino V0017 con cepas, maridajes y stock. |
+| S10 | CTE y subconsulta correlacionada | Rendimiento por parcela y campaña comparado con el promedio de su finca. |
+| S11a | `RANK() OVER (PARTITION BY sala)` | Ranking de vinos por botellas vendidas dentro de cada sala. |
+| S11b | `SUM() OVER (... ROWS UNBOUNDED PRECEDING)` | Ventas mensuales acumuladas por sala. |
+| S12a | División relacional con `NOT EXISTS` | Clientes que compraron todos los vinos de una bodega. |
+| S12b | Anti-join | Clientes que nunca compraron vino tinto. |
+
+Las consultas usan `CURRENT_DATE`, por lo que la fecha de ejecución forma parte del resultado. La salida completa, con los encabezados y las filas devueltas, está en `consultas/salida_select_local.txt`.
+
+## Planes de ejecución (S9–S12)
+
+Se ejecutó `EXPLAIN (ANALYZE, BUFFERS)` sobre `bodega_seed`, con 150.000 comprobantes y 510.382 renglones. Los bloques son de solo lectura y terminan en `ROLLBACK`.
+
+| Consulta | Tiempo de ejecución | Observación |
+|---|---:|---|
+| S9 | 1,614 ms | Usa la vista de stock y recorridos por índice; no presenta problemas. |
+| S10 | 3.344,769 ms | Es la consulta más costosa: las dos subconsultas correlacionadas (promedio usado en el `SELECT` y en el `CASE`) se ejecutan 4.000 veces cada una y recorren el CTE `rendimiento` en cada iteración. Conviene precalcular los promedios en otro CTE o usar `AVG(...) OVER (PARTITION BY id_finca, campania)`. |
+| S11a | 253,965 ms | Join paralelo y `WindowAgg`; el orden final se resuelve con `Incremental Sort`. |
+| S11b | 120,150 ms | Agregación mensual y ventana acumulada; sin problemas. |
+| S12a | 313,336 ms | La división por `NOT EXISTS` se resuelve con anti-join sobre las compras de la bodega. |
+| S12b | 248,608 ms | Anti-join contra el conjunto de clientes que compraron tintos. |
+
+Los planes son provisionales hasta integrar la propuesta de índices de la Etapa 4. Cuando se agregue `008_indices.sql`, corresponde volver a ejecutar `consultas/explain_s9_s12.txt` para comparar tiempos y verificar que los índices elegidos sean utilizados.
+
 # Etapa 6
 
 # Etapa 7
