@@ -11,6 +11,9 @@ masiva reproducible, pruebas y documentación.
 | `db/migrations/` | Esquema, constraints, funciones, procedimientos, triggers, vistas y roles |
 | `db/seed/` | Catálogos CSV, generador `load.py` y documentación de la carga masiva |
 | `db/tests/` | Pruebas de las reglas RN-01 a RN-15 y verificación de la carga |
+| `api/` | API REST con FastAPI, acceso a datos, routers y reportes |
+| `tests/` | Pruebas automatizadas de la API |
+| `docker-compose.yml` | PostgreSQL, inicialización de datos y API |
 | `db/dump_completo.sql.gz` | Volcado completo de la base cargada |
 | `docs/` | Enunciado, DER, esquema relacional, diccionario e informe |
 | `docs/informe.md` | Informe de pasos, decisiones, trazabilidad y concurrencia |
@@ -136,6 +139,40 @@ sus permisos se recrean con la migración `007`.
 - `docs/Diagrama Relacional/`: esquema relacional.
 - `docs/Diccionario/`: diccionario de datos.
 - `db/seed/README.md`: procedimiento detallado de la carga masiva.
+
+## API REST y Docker
+
+La API se puede ejecutar localmente contra `bodega_seed`:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r api\requirements-dev.txt
+$env:DATABASE_URL = "postgresql://bodega_api@127.0.0.1:55432/bodega_seed"
+.\.venv\Scripts\python.exe -m uvicorn api.main:app --reload --port 8001
+```
+
+La documentación interactiva queda en `http://127.0.0.1:8001/docs` y el control
+de salud en `http://127.0.0.1:8001/salud`.
+
+Pruebas automatizadas:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Las pruebas crean `bodega_api_test` a partir de `bodega_seed`. Para usar otra
+base de prueba se configuran `TEST_DATABASE_URL`, `TEST_ADMIN_URL`,
+`TEST_DB_NAME` y `TEST_TEMPLATE_DB`.
+
+Con Docker Compose:
+
+```bash
+docker compose up --build
+curl http://localhost:8001/salud
+```
+
+El servicio `db-init` aplica las migraciones, asigna las contraseñas de los
+roles y carga los datos con `load.py`. Si la base ya tiene vinos, la carga se
+omite; para forzar una recarga se usa `FORCE_RELOAD=1`.
 
 ## Notas
 

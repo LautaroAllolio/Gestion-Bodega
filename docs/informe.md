@@ -675,6 +675,123 @@ Los planes son provisionales hasta integrar la propuesta de índices de la Etapa
 
 # Etapa 6
 
+## API REST
+
+La API se implementó con FastAPI, `psycopg` 3 y `psycopg_pool`. La cadena de conexión, el tamaño del pool y los orígenes CORS se leen de variables de entorno (`DATABASE_URL`, `POOL_MIN_SIZE`, `POOL_MAX_SIZE`, `CORS_ORIGINS`), con valores locales por defecto en `api/config.py`. El pool se abre y cierra con el ciclo de vida de la aplicación (`api/main.py`).
+
+La organización es la siguiente:
+
+| Archivo | Responsabilidad |
+|---|---|
+| `api/main.py` | Creación de la app, CORS, handlers de error, `/salud` y registro de routers. |
+| `api/config.py` | Configuración por variables de entorno. |
+| `api/db.py` | Pool de conexiones y helpers de consulta. |
+| `api/repository.py` | SQL parametrizado para vinos, clientes, ventas, ingresos y transferencias. |
+| `api/reports.py` | Consultas de los reportes S1–S12. |
+| `api/routers/` | Routers de vinos, clientes, documentos y reportes. |
+| `api/errors.py` | Traducción de errores PostgreSQL a respuestas HTTP. |
+
+Las reglas de negocio siguen viviendo en la base: la API no reimplementa stock, descuentos, totales, estados ni composición de cortes. Los triggers y procedimientos de las etapas anteriores son los que validan y modifican los datos. Por eso los errores `P0001` se devuelven como `409 Conflict` con el mensaje original de la base.
+
+### Endpoints principales
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `GET` | `/salud` | Estado de la API y base conectada. |
+| `GET` | `/vinos` | Listado paginado con filtros `q`, `tipo` y `bodega`. |
+| `POST` | `/vinos` | Alta de vino con cepas y maridajes. |
+| `GET` | `/vinos/{codigo}` | Ficha con composición, maridajes y stock. |
+| `PATCH` | `/vinos/{codigo}` | Actualización parcial; audita cambios de precio. |
+| `DELETE` | `/vinos/{codigo}` | Baja de vino. |
+| `GET` | `/clientes` | Listado paginado con filtros `q` y `tipo_cliente`. |
+| `POST` | `/clientes` | Alta de socio, distribuidor o exportador. |
+| `GET` | `/clientes/{id}` | Ficha del cliente. |
+| `PATCH` | `/clientes/{id}` | Actualización parcial y cambio de subtipo. |
+| `DELETE` | `/clientes/{id}` | Baja de cliente. |
+| `POST` | `/comprobantes` | Venta con uno o más renglones. |
+| `GET` | `/comprobantes/{nro}` | Comprobante con sus renglones. |
+| `POST` | `/transferencias` | Alta de transferencia en confección. |
+| `POST` | `/transferencias/{nro}/renglones` | Agrega un renglón. |
+| `POST` | `/transferencias/{nro}/terminar` | Pasa a terminada. |
+| `POST` | `/transferencias/{nro}/procesar` | Ejecuta `sp_procesar_transferencia`. |
+| `GET` | `/transferencias/{nro}` | Transferencia con renglones. |
+| `POST` | `/ingresos` | Alta de ingreso en confección. |
+| `POST` | `/ingresos/{id}/renglones` | Agrega un renglón. |
+| `POST` | `/ingresos/{id}/terminar` | Pasa a terminado. |
+| `POST` | `/ingresos/{id}/procesar` | Ejecuta `sp_procesar_ingreso`. |
+| `GET` | `/ingresos/{id}` | Ingreso con renglones. |
+| `GET` | `/reportes/s1-stock-total` | S1: stock total por vino. |
+| `GET` | `/reportes/s2-ventas-mensuales-sala` | S2: ventas mensuales por sala. |
+| `GET` | `/reportes/s3-documentos-pendientes` | S3: documentos pendientes. |
+| `GET` | `/reportes/s4-top-vinos` | S4: vinos más vendidos. |
+| `GET` | `/reportes/s5-top-clientes` | S5: clientes con mayor facturación. |
+| `GET` | `/reportes/s6-ventas-localidad` | S6: ventas por localidad. |
+| `GET` | `/reportes/s7-ventas-tipo` | S7: ventas por tipo de vino. |
+| `GET` | `/reportes/s8-clientes-sin-compras` | S8: clientes sin compras. |
+| `GET` | `/reportes/s9-vinos-sin-stock` | S9: vinos sin stock. |
+| `GET` | `/reportes/s10-top-salas` | S10: salas con mayores ventas. |
+| `GET` | `/reportes/s11-descuentos-clientes` | S11: descuentos otorgados por cliente. |
+| `GET` | `/reportes/s12-evolucion-mensual` | S12: evolución mensual de ventas. |
+
+### Seguridad y errores
+
+Todas las consultas usan parámetros de `psycopg`; no se concatenan valores de entrada. Los únicos nombres de tabla/columna interpolados son constantes internas del código. La API se conecta con el rol `bodega_api`, que tiene DML sobre las tablas pero no puede modificar ni borrar `AuditoriaPrecio`; la auditoría de precios queda append-only y la escribe el trigger.
+
+La demostración de inyección se hace con `GET /vinos?q=' OR 1=1 --`. El valor se pasa como parámetro a `ILIKE` y la respuesta contiene cero coincidencias, sin alterar la consulta. La prueba automatizada verifica ese comportamiento.
+
+| SQLSTATE | HTTP | Caso |
+|---|---|---|
+| `23505` | `409` | Unicidad (por ejemplo, código de vino repetido). |
+| `23503` | `409` | Clave foránea (por ejemplo, borrar un vino con ventas). |
+| `P0001` | `409` | Regla de negocio de un trigger o procedimiento. |
+| `23514` | `422` | `CHECK` (precio negativo, descuento fuera de rango, etc.). |
+| `23502` | `422` | Campo obligatorio faltante. |
+| `22P02` | `400` | Formato inválido para el tipo de dato. |
+| `42501` | `403` | Permiso insuficiente. |
+| `40001`, `40P01` | `503` | Serialización o deadlock; se sugiere reintentar. |
+
+### Pruebas automatizadas
+
+`tests/conftest.py` crea una base de prueba `bodega_api_test` a partir de `bodega_seed` usando `TEST_ADMIN_URL`, y configura `DATABASE_URL` antes de importar la aplicación. `tests/test_api.py` contiene 11 pruebas:
+
+- salud de la API;
+- listado, filtros y búsqueda parametrizada;
+- CRUD de vino;
+- rechazo de precio negativo (`23514`);
+- rechazo de composición de cortes distinta de 100 (`P0001`);
+- CRUD de cliente distribuidor;
+- venta válida;
+- venta sin stock (`P0001`);
+- ingreso procesado que no admite nuevos renglones (`P0001`);
+- flujo completo de transferencia y reprocesamiento rechazado;
+- los 12 endpoints de reportes.
+
+Resultado local:
+
+```text
+$ pytest -q
+11 passed
+```
+
+### Docker Compose
+
+`docker-compose.yml` define tres servicios:
+
+- `db`: PostgreSQL 16 con volumen `bodega_pgdata` y healthcheck.
+- `db-init`: ejecuta `db/init_db.py` una sola vez. Crea el esquema con `001`–`006`, aplica `007_roles.sql`, asigna las contraseñas de los roles y carga los datos con `db/seed/load.py --reset --scale ${SEED_SCALE}`.
+- `api`: construye `api/Dockerfile`, espera a que `db-init` termine correctamente y publica la API en `http://localhost:8001`.
+
+La inicialización es idempotente: si `Vino` ya tiene filas, no vuelve a cargar. Para forzar una recarga se usa `FORCE_RELOAD=1`. La API se conecta con `bodega_api`; `db-init` y la carga usan el usuario administrador de PostgreSQL.
+
+```bash
+docker compose up --build
+curl http://localhost:8001/salud
+curl http://localhost:8001/vinos?limit=5
+curl http://localhost:8001/reportes/s1-stock-total
+```
+
+El comando `docker` no estaba disponible en el entorno local, por lo que no se pudo ejecutar el build de Compose. Se validó la sintaxis YAML y se ejecutó `db/init_db.py` contra un PostgreSQL local con `SEED_SCALE=0.02`, incluyendo migraciones, roles, carga y conexión de la API como `bodega_api`.
+
 # Etapa 7
 
 # Etapa 8
