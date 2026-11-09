@@ -1337,7 +1337,7 @@ Se ejecutó `EXPLAIN (ANALYZE, BUFFERS)` sobre `bodega_seed`, con 150.000 compro
 | S12a | 313,336 ms | La división por `NOT EXISTS` se resuelve con anti-join sobre las compras de la bodega. |
 | S12b | 248,608 ms | Anti-join contra el conjunto de clientes que compraron tintos. |
 
-Los planes son provisionales hasta integrar la propuesta de índices de la Etapa 4. Cuando se agregue `008_indices.sql`, corresponde volver a ejecutar `consultas/explain_s9_s12.txt` para comparar tiempos y verificar que los índices elegidos sean utilizados.
+La Etapa 4 ya está integrada con `008_indices.sql` y sus mediciones. Si se cambian los índices, corresponde volver a ejecutar `consultas/explain_s9_s12.txt` para comparar tiempos y verificar que los índices elegidos sigan siendo utilizados.
 
 # Etapa 6
 
@@ -1364,7 +1364,7 @@ Las reglas de negocio siguen viviendo en la base: la API no reimplementa stock, 
 | Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/salud` | Estado de la API y base conectada. |
-| `GET` | `/vinos` | Listado paginado con filtros `q`, `tipo` y `bodega`. |
+| `GET` | `/vinos` | Listado paginado con filtros `q`, `tipo`, `bodega`, `cepa` y `anada`. |
 | `POST` | `/vinos` | Alta de vino con cepas y maridajes. |
 | `GET` | `/vinos/{codigo}` | Ficha con composición, maridajes y stock. |
 | `PATCH` | `/vinos/{codigo}` | Actualización parcial; audita cambios de precio. |
@@ -1374,8 +1374,11 @@ Las reglas de negocio siguen viviendo en la base: la API no reimplementa stock, 
 | `GET` | `/clientes/{id}` | Ficha del cliente. |
 | `PATCH` | `/clientes/{id}` | Actualización parcial y cambio de subtipo. |
 | `DELETE` | `/clientes/{id}` | Baja de cliente. |
+| `GET` | `/catalogos/bodegas`, `/cepas`, `/maridajes`, `/salas`, `/depositos` | Catálogos para los formularios del front. |
 | `POST` | `/comprobantes` | Venta con uno o más renglones. |
+| `POST` | `/comprobantes/cotizar` | Cotiza una venta y revierte la transacción. |
 | `GET` | `/comprobantes/{nro}` | Comprobante con sus renglones. |
+| `GET` | `/transferencias` | Listado paginado con filtro `estado`. |
 | `POST` | `/transferencias` | Alta de transferencia en confección. |
 | `POST` | `/transferencias/{nro}/renglones` | Agrega un renglón. |
 | `POST` | `/transferencias/{nro}/terminar` | Pasa a terminada. |
@@ -1398,6 +1401,8 @@ Las reglas de negocio siguen viviendo en la base: la API no reimplementa stock, 
 | `GET` | `/reportes/s10-top-salas` | S10: salas con mayores ventas. |
 | `GET` | `/reportes/s11-descuentos-clientes` | S11: descuentos otorgados por cliente. |
 | `GET` | `/reportes/s12-evolucion-mensual` | S12: evolución mensual de ventas. |
+| `GET` | `/reportes/s13-ventas-sala-trimestre` | S13: ventas por sala en los últimos tres meses. |
+| `GET` | `/reportes/s14-vinos-sin-stock-sala` | S14: vinos sin stock en una sala; requiere `id_sala`. |
 
 ### Seguridad y errores
 
@@ -1418,7 +1423,7 @@ La demostración de inyección se hace con `GET /vinos?q=' OR 1=1 --`. El valor 
 
 ### Pruebas automatizadas
 
-`tests/conftest.py` crea una base de prueba `bodega_api_test` a partir de `bodega_seed` usando `TEST_ADMIN_URL`, y configura `DATABASE_URL` antes de importar la aplicación. `tests/test_api.py` contiene 11 pruebas:
+`tests/conftest.py` crea una base de prueba `bodega_api_test` a partir de `bodega_seed` usando `TEST_ADMIN_URL`, y configura `DATABASE_URL` antes de importar la aplicación. `tests/test_api.py` contiene 17 pruebas:
 
 - salud de la API;
 - listado, filtros y búsqueda parametrizada;
@@ -1430,22 +1435,29 @@ La demostración de inyección se hace con `GET /vinos?q=' OR 1=1 --`. El valor 
 - venta sin stock (`P0001`);
 - ingreso procesado que no admite nuevos renglones (`P0001`);
 - flujo completo de transferencia y reprocesamiento rechazado;
-- los 12 endpoints de reportes.
+- catálogos usados por el front;
+- filtros de vinos por cepa y añada;
+- cotización que no persiste el comprobante;
+- cotización sin stock (`P0001`);
+- listado paginado de transferencias;
+- reportes S13 y S14;
+- los 12 endpoints de reportes restantes.
 
 Resultado local:
 
 ```text
-$ pytest -q
-11 passed
+$ python -m pytest -q
+17 passed
 ```
 
 ### Docker Compose
 
-`docker-compose.yml` define tres servicios:
+`docker-compose.yml` define cuatro servicios:
 
 - `db`: PostgreSQL 16 con volumen `bodega_pgdata` y healthcheck.
-- `db-init`: ejecuta `db/init_db.py` una sola vez. Crea el esquema con `001`–`006`, aplica `007_roles.sql`, asigna las contraseñas de los roles y carga los datos con `db/seed/load.py --reset --scale ${SEED_SCALE}`.
+- `db-init`: ejecuta `db/init_db.py` una sola vez. Crea el esquema con `001`–`008`, aplica `007_roles.sql`, asigna las contraseñas de los roles y carga los datos con `db/seed/load.py --reset --scale ${SEED_SCALE}`.
 - `api`: construye `api/Dockerfile`, espera a que `db-init` termine correctamente y publica la API en `http://localhost:8001`.
+- `front`: construye la SPA con Node 22, la sirve con Nginx y publica el front en `http://localhost:8080`; `/api/` se proxifica a `api:8000`.
 
 La inicialización es idempotente: si `Vino` ya tiene filas, no vuelve a cargar. Para forzar una recarga se usa `FORCE_RELOAD=1`. La API se conecta con `bodega_api`; `db-init` y la carga usan el usuario administrador de PostgreSQL.
 
@@ -1454,12 +1466,69 @@ docker compose up --build
 curl http://localhost:8001/salud
 curl http://localhost:8001/vinos?limit=5
 curl http://localhost:8001/reportes/s1-stock-total
+curl http://localhost:8080/api/salud
 ```
 
-El comando `docker` no estaba disponible en el entorno local, por lo que no se pudo ejecutar el build de Compose. Se validó la sintaxis YAML y se ejecutó `db/init_db.py` contra un PostgreSQL local con `SEED_SCALE=0.02`, incluyendo migraciones, roles, carga y conexión de la API como `bodega_api`.
+La verificación local se hizo con el stack completo: las imágenes de `api` y `front` construyeron, `front` quedó `healthy`, el proxy `/api/salud` respondió con la base `bodega` y el fallback de SPA devolvió `index.html` para `/vinos/nuevo`.
 
 # Etapa 7
 
+## Front de gestión
+
+El front se implementó en `front/` con React 19, Vite 8, TypeScript 5.9, React Router 7 y Recharts 3. Se usa CSS propio y no se agregó una biblioteca de componentes. En producción, el build de Vite se copia a una imagen Nginx; en desarrollo, Vite atiende el puerto 5173 y proxifica `/api` a `127.0.0.1:8001`.
+
+### Pantallas
+
+| Pantalla | Ruta | Alcance |
+|---|---|---|
+| Catálogo | `/vinos` | Filtros por texto, tipo, cepa, bodega y añada; paginación; detalle con cepas, maridajes y stock |
+| Alta/edición de vino | `/vinos/nuevo`, `/vinos/:codigo/editar` | Formulario con bodega, cepas, porcentajes y maridajes; en edición carga la ficha y envía `PATCH` |
+| Nueva venta | `/ventas/nueva` | Cliente, sala, carrito, cotización y confirmación |
+| Transferencias | `/transferencias` | Listado, alta, detalle, renglones, `terminar` y `procesar` |
+| Tablero | `/tablero` | S4, S13 y S14 con Recharts y tablas de respaldo |
+
+### Capa de API y estado
+
+`front/src/api/client.ts` centraliza `fetch`, arma query strings y convierte los errores HTTP en `ApiError`, conservando `detail` y `sqlstate`. `front/src/api/endpoints.ts` expone funciones tipadas y `front/src/api/types.ts` define los contratos. `CatalogosContext` carga una sola vez bodegas, cepas, maridajes, salas y depósitos. Las páginas usan `useDebouncedValue` para no disparar una consulta por cada tecla.
+
+El front no calcula subtotales, descuentos, totales ni stock. La pantalla de venta llama a `POST /comprobantes/cotizar` cada vez que cambia el carrito, el cliente o la sala, y muestra `subtotal`, `descuento` y `total` devueltos por la API. Al confirmar, llama a `POST /comprobantes`. El backend ejecuta la cotización dentro de una transacción y hace rollback; por eso no persiste el comprobante, aunque consume un número de secuencia.
+
+### Endpoints agregados
+
+- `GET /catalogos/bodegas`, `/cepas`, `/maridajes`, `/salas` y `/depositos`.
+- Filtros `cepa` y `anada` en `GET /vinos`.
+- `POST /comprobantes/cotizar`.
+- `GET /transferencias` con filtro `estado` y paginación.
+- `GET /reportes/s13-ventas-sala-trimestre`.
+- `GET /reportes/s14-vinos-sin-stock-sala?id_sala=`.
+
+También se cambió `api/requirements.txt` a `psycopg[binary,pool]` para que la imagen `python:3.12-slim` tenga el binario de `libpq` sin instalar paquetes del sistema.
+
+### Verificación
+
+```text
+$ cd front && npm run build
+✓ built in 19.20s
+
+$ python -m pytest -q
+17 passed
+
+$ docker compose build front api
+$ docker compose up -d
+$ curl http://localhost:8080/api/salud
+{"status":"ok","database":"bodega"}
+```
+
+La cotización de prueba devolvió un comprobante con subtotal, descuento y total, y el conteo de `ComprobanteVenta` permaneció en 15000 antes y después. Quedan dos avisos no bloqueantes: el bundle principal de Vite mide 667 kB y Starlette sugiere migrar de `httpx` a `httpx2` en el futuro.
+
 # Etapa 8
 
+## Despliegue local
+
+El despliegue incluido es local y reproducible con Docker Compose: PostgreSQL, inicialización, API y front. No se configuró un proveedor de nube, TLS de producción, backups operativos ni restauración remota. El front se publica en `http://localhost:8080` y la API en `http://localhost:8001`.
+
 # Etapa 9
+
+## Documentación y defensa
+
+La documentación está en este archivo, en `docs/Informe_Bodegas_del_Atuel.md`, en `README.md` y en `docs/capturas/`. La demo en vivo y la defensa oral no forman parte del repositorio.

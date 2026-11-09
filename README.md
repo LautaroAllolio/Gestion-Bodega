@@ -12,8 +12,9 @@ masiva reproducible, pruebas y documentación.
 | `db/seed/` | Catálogos CSV, generador `load.py` y documentación de la carga masiva |
 | `db/tests/` | Pruebas de las reglas RN-01 a RN-15 y verificación de la carga |
 | `api/` | API REST con FastAPI, acceso a datos, routers y reportes |
+| `front/` | SPA React + Vite + TypeScript para catálogo, ventas, transferencias y tablero |
 | `tests/` | Pruebas automatizadas de la API |
-| `docker-compose.yml` | PostgreSQL, inicialización de datos y API |
+| `docker-compose.yml` | PostgreSQL, inicialización de datos, API y front |
 | `db/dump_completo.sql.gz` | Volcado completo de la base cargada |
 | `docs/` | Enunciado, DER, esquema relacional, diccionario e informe |
 | `docs/informe.md` | Informe de pasos, decisiones, trazabilidad y concurrencia |
@@ -22,6 +23,7 @@ masiva reproducible, pruebas y documentación.
 
 - PostgreSQL 14 o superior.
 - Python 3.10 o superior para la carga masiva.
+- Node.js 20.19 o superior y npm para el front.
 - `psql`, `pg_dump` y `gzip` (o 7-Zip) disponibles.
 - Dependencias de `db/seed/requirements.txt`.
 
@@ -140,7 +142,9 @@ sus permisos se recrean con la migración `007`.
 - `docs/Diccionario/`: diccionario de datos.
 - `db/seed/README.md`: procedimiento detallado de la carga masiva.
 
-## API REST y Docker
+## API REST, front y Docker
+
+### Ejecución local de la API
 
 La API se puede ejecutar localmente contra `bodega_seed`:
 
@@ -161,22 +165,61 @@ Pruebas automatizadas:
 
 Las pruebas crean `bodega_api_test` a partir de `bodega_seed`. Para usar otra
 base de prueba se configuran `TEST_DATABASE_URL`, `TEST_ADMIN_URL`,
-`TEST_DB_NAME` y `TEST_TEMPLATE_DB`.
+`TEST_DB_NAME` y `TEST_TEMPLATE_DB`. La suite actual tiene 17 pruebas.
 
-Con Docker Compose:
+### Front en desarrollo
+
+```bash
+cd front
+npm install
+npm run dev
+```
+
+El front queda en `http://127.0.0.1:5173` y Vite reescribe `/api` hacia
+`http://127.0.0.1:8001`. La compilación de producción se valida con
+`npm run build`.
+
+### Stack completo con Docker Compose
 
 ```bash
 docker compose up --build
-curl http://localhost:8001/salud
 ```
 
-El servicio `db-init` aplica las migraciones, asigna las contraseñas de los
-roles y carga los datos con `load.py`. Si la base ya tiene vinos, la carga se
-omite; para forzar una recarga se usa `FORCE_RELOAD=1`.
+| Servicio | URL | Descripción |
+|---|---|---|
+| `front` | `http://localhost:8080` | SPA servida por Nginx; `/api/` se proxifica a `api:8000` |
+| `api` | `http://localhost:8001` | FastAPI y documentación en `/docs` |
+| `db` | `localhost:55433` | PostgreSQL 16 con volumen persistente |
+| `db-init` | — | Migraciones, roles y carga inicial; termina al finalizar |
+
+El front usa `FRONT_PORT` (por defecto `8080`). `db-init` aplica las migraciones,
+incluida `008_indices.sql`, asigna las contraseñas de los roles y carga los datos
+con `load.py`. Si la base ya tiene vinos, la carga se omite; para forzar una
+recarga se usa `FORCE_RELOAD=1`.
+
+### Pantallas y endpoints usados por el front
+
+El front implementa cinco pantallas: catálogo con filtros y detalle,
+alta/edición de vino, nueva venta, transferencias y tablero. No calcula totales,
+descuentos ni stock: muestra los valores devueltos por la API.
+
+| Pantalla | Endpoints principales |
+|---|---|
+| Catálogo y ficha | `GET /vinos`, `GET /vinos/{codigo}`, catálogos |
+| Alta/edición | `POST /vinos`, `PATCH /vinos/{codigo}`, catálogos |
+| Nueva venta | `GET /clientes`, `GET /vinos`, `POST /comprobantes/cotizar`, `POST /comprobantes` |
+| Transferencias | `GET/POST /transferencias`, renglones, `terminar` y `procesar` |
+| Tablero | `GET /reportes/s4-top-vinos`, `s13-ventas-sala-trimestre` y `s14-vinos-sin-stock-sala` |
+
+`POST /comprobantes/cotizar` ejecuta la venta dentro de una transacción para que
+los triggers calculen subtotal, descuento y total, y luego hace rollback. No
+persiste el comprobante, pero consume un número de secuencia.
 
 ## Notas
 
 - No se guardan contraseñas ni secretos en el repositorio.
 - La API no debe recalcular totales, descuentos ni stock: debe llamar a las
-  funciones y procedimientos de la base.
+  funciones y procedimientos de la base. El front tampoco los recalcula.
 - El volcado actual fue generado con PostgreSQL 18.3 y 745.569 filas.
+- El despliegue incluido es local con Docker Compose; no reemplaza un despliegue
+  en la nube con backups y conexión cifrada.

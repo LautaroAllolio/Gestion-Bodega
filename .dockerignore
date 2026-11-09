@@ -8,3 +8,6 @@ tests
 consultas
 docs
 db/dump_completo.sql.gz
+**/node_modules
+**/dist
+**/*.tsbuildinfo
