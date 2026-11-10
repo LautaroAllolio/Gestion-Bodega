@@ -1,8 +1,12 @@
 import uuid
 
+import pytest
+from pydantic import ValidationError
 from fastapi.testclient import TestClient
 
-from api.db import fetch_one
+from api.db import fetch_one, transaction
+from api.repository import _descuento_exportador
+from api.schemas import PermisoExportacionCreate
 
 
 def _vino_payload(seed: dict, codigo: str) -> dict:
@@ -125,7 +129,7 @@ def test_crud_cliente(client: TestClient, seed: dict):
         "calle_cliente": "San Martin",
         "nro_calle_cliente": 123,
         "id_localidad": seed["id_localidad"],
-        "descuento_porcentaje": 5,
+        "descuento_porcentaje": 20,
         "zona_cobertura": "Mendoza",
         "nro_habilitacion": "HAB-1",
     }
@@ -143,6 +147,317 @@ def test_crud_cliente(client: TestClient, seed: dict):
     assert client.get(f"/clientes/{id_cliente}").status_code == 404
 
 
+def test_descuento_exportador_35_requiere_mas_de_tres_permisos(
+    client: TestClient, seed: dict
+):
+    payload = {
+        "apellido": "Exportador de prueba",
+        "nombre": None,
+        "cuit": _cuit(),
+        "tipo_cliente": "Exportador",
+        "tipo_documento": "CUIT",
+        "nro_documento": _cuit(),
+        "calle_cliente": "San Martin",
+        "nro_calle_cliente": 123,
+        "id_localidad": seed["id_localidad"],
+        "descuento_porcentaje": 30,
+        "pais_destino_principal": "Chile",
+    }
+    created = client.post("/clientes", json=payload)
+    assert created.status_code == 201
+    id_cliente = created.json()["id_cliente"]
+    try:
+        rejected = client.patch(
+            f"/clientes/{id_cliente}", json={"descuento_porcentaje": 35}
+        )
+        assert rejected.status_code == 422
+
+        with transaction() as conn:
+            with conn.cursor() as cur:
+                for index in range(4):
+                    cur.execute(
+                        """
+                        INSERT INTO PermisoExportacion
+                            (id_cliente, codigo_permiso, fecha_emision, fecha_vencimiento)
+                        VALUES (%s, %s, DATE '2025-01-01', DATE '2026-01-01')
+                        """,
+                        (id_cliente, f"TEST-{uuid.uuid4().hex}-{index}"),
+                    )
+
+        normalized = client.patch(
+            f"/clientes/{id_cliente}", json={"apellido": "Exportador normalizado"}
+        )
+        assert normalized.status_code == 200
+        assert normalized.json()["descuento_porcentaje"] == 35
+
+        rejected_30 = client.patch(
+            f"/clientes/{id_cliente}", json={"descuento_porcentaje": 30}
+        )
+        assert rejected_30.status_code == 422
+
+        accepted = client.patch(
+            f"/clientes/{id_cliente}", json={"descuento_porcentaje": 35}
+        )
+        assert accepted.status_code == 200
+
+        replacement = {
+            key: value
+            for key, value in created.json().items()
+            if key in {
+                "apellido",
+                "nombre",
+                "cuit",
+                "tipo_cliente",
+                "tipo_documento",
+                "nro_documento",
+                "calle_cliente",
+                "nro_calle_cliente",
+                "id_localidad",
+                "fecha_alta",
+                "descuento_porcentaje",
+                "numero_socio",
+                "zona_cobertura",
+                "nro_habilitacion",
+                "pais_destino_principal",
+            }
+        }
+        replacement["apellido"] = "Exportador actualizado"
+        replacement["descuento_porcentaje"] = 35
+        updated = client.put(f"/clientes/{id_cliente}", json=replacement)
+
+        assert updated.status_code == 200
+        assert fetch_one(
+            "SELECT count(*) AS total FROM PermisoExportacion WHERE id_cliente = %s",
+            (id_cliente,),
+        )["total"] == 4
+    finally:
+        client.delete(f"/clientes/{id_cliente}")
+
+
+def test_crud_permisos_exportador_actualiza_descuento(
+    client: TestClient, seed: dict
+):
+    payload = {
+        "apellido": "Exportador con permisos",
+        "nombre": None,
+        "cuit": _cuit(),
+        "tipo_cliente": "Exportador",
+        "tipo_documento": "CUIT",
+        "nro_documento": _cuit(),
+        "calle_cliente": "San Martin",
+        "nro_calle_cliente": 123,
+        "id_localidad": seed["id_localidad"],
+        "descuento_porcentaje": 30,
+        "pais_destino_principal": "Chile",
+    }
+    created = client.post("/clientes", json=payload)
+    assert created.status_code == 201
+    id_cliente = created.json()["id_cliente"]
+
+    try:
+        assert client.get(f"/clientes/{id_cliente}/permisos").json() == []
+        permisos = []
+        for index in range(4):
+            response = client.post(
+                f"/clientes/{id_cliente}/permisos",
+                json={
+                    "codigo_permiso": f"TEST-{uuid.uuid4().hex}-{index}",
+                    "fecha_emision": "2026-01-01",
+                    "fecha_vencimiento": "2027-01-01",
+                },
+            )
+            assert response.status_code == 201
+            permisos.append(response.json())
+
+        assert len(client.get(f"/clientes/{id_cliente}/permisos").json()) == 4
+        assert client.get(f"/clientes/{id_cliente}").json()["descuento_porcentaje"] == 35
+
+        deleted = client.delete(
+            f"/clientes/{id_cliente}/permisos/{permisos[0]['id_permiso']}"
+        )
+
+        assert deleted.status_code == 204
+        assert len(client.get(f"/clientes/{id_cliente}/permisos").json()) == 3
+        assert client.get(f"/clientes/{id_cliente}").json()["descuento_porcentaje"] == 30
+        assert client.patch(
+            f"/clientes/{id_cliente}", json={"descuento_porcentaje": 35}
+        ).status_code == 422
+    finally:
+        client.delete(f"/clientes/{id_cliente}")
+
+
+def test_permisos_solo_se_pueden_asignar_a_exportadores(
+    client: TestClient, seed: dict
+):
+    payload = {
+        "apellido": "Socio sin permisos",
+        "nombre": None,
+        "cuit": _cuit(),
+        "tipo_cliente": "Socio",
+        "tipo_documento": "DNI",
+        "nro_documento": uuid.uuid4().hex[:10],
+        "calle_cliente": "San Martin",
+        "nro_calle_cliente": 123,
+        "id_localidad": seed["id_localidad"],
+        "descuento_porcentaje": 10,
+        "numero_socio": 900000 + uuid.uuid4().int % 99999,
+    }
+    created = client.post("/clientes", json=payload)
+    assert created.status_code == 201
+    id_cliente = created.json()["id_cliente"]
+    try:
+        response = client.post(
+            f"/clientes/{id_cliente}/permisos",
+            json={
+                "codigo_permiso": "NO-EXPORTADOR",
+                "fecha_emision": "2026-01-01",
+                "fecha_vencimiento": "2027-01-01",
+            },
+        )
+
+        assert response.status_code == 422
+    finally:
+        client.delete(f"/clientes/{id_cliente}")
+
+
+def test_permiso_rechaza_vencimiento_anterior_a_emision(
+    client: TestClient, seed: dict
+):
+    response = client.post(
+        f"/clientes/{seed['id_cliente']}/permisos",
+        json={
+            "codigo_permiso": "FECHAS-INVALIDAS",
+            "fecha_emision": "2027-01-01",
+            "fecha_vencimiento": "2026-01-01",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_schema_permiso_acepta_fechas_validas():
+    permiso = PermisoExportacionCreate.model_validate(
+        {
+            "codigo_permiso": "PERM-1",
+            "fecha_emision": "2026-01-01",
+            "fecha_vencimiento": "2027-01-01",
+        }
+    )
+
+    assert permiso.codigo_permiso == "PERM-1"
+
+
+def test_schema_permiso_rechaza_fechas_invalidas():
+    with pytest.raises(ValidationError):
+        PermisoExportacionCreate.model_validate(
+            {
+                "codigo_permiso": "PERM-1",
+                "fecha_emision": "2027-01-01",
+                "fecha_vencimiento": "2026-01-01",
+            }
+        )
+
+
+def test_schema_permiso_rechaza_codigo_vacio():
+    with pytest.raises(ValidationError):
+        PermisoExportacionCreate.model_validate(
+            {
+                "codigo_permiso": "   ",
+                "fecha_emision": "2026-01-01",
+                "fecha_vencimiento": "2027-01-01",
+            }
+        )
+
+
+@pytest.mark.parametrize(("total_permisos", "descuento"), [(0, 30), (3, 30), (4, 35)])
+def test_descuento_exportador_segun_cantidad_de_permisos(
+    total_permisos: int, descuento: int
+):
+    assert _descuento_exportador(total_permisos) == descuento
+
+
+def test_no_se_puede_cambiar_tipo_si_exportador_tiene_permisos(
+    client: TestClient, seed: dict
+):
+    payload = {
+        "apellido": "Exportador protegido",
+        "nombre": None,
+        "cuit": _cuit(),
+        "tipo_cliente": "Exportador",
+        "tipo_documento": "CUIT",
+        "nro_documento": _cuit(),
+        "calle_cliente": "San Martin",
+        "nro_calle_cliente": 123,
+        "id_localidad": seed["id_localidad"],
+        "descuento_porcentaje": 30,
+        "pais_destino_principal": "Chile",
+    }
+    created = client.post("/clientes", json=payload)
+    assert created.status_code == 201
+    id_cliente = created.json()["id_cliente"]
+    try:
+        permission = client.post(
+            f"/clientes/{id_cliente}/permisos",
+            json={
+                "codigo_permiso": f"TEST-{uuid.uuid4().hex}",
+                "fecha_emision": "2026-01-01",
+                "fecha_vencimiento": "2027-01-01",
+            },
+        )
+        assert permission.status_code == 201
+
+        response = client.patch(
+            f"/clientes/{id_cliente}",
+            json={
+                "tipo_cliente": "Socio",
+                "descuento_porcentaje": 10,
+                "numero_socio": 900000 + uuid.uuid4().int % 99999,
+            },
+        )
+
+        assert response.status_code == 422
+        assert client.get(f"/clientes/{id_cliente}").json()["tipo_cliente"] == "Exportador"
+        assert len(client.get(f"/clientes/{id_cliente}/permisos").json()) == 1
+    finally:
+        client.delete(f"/clientes/{id_cliente}")
+
+
+def test_crear_cliente_rechaza_descuento_que_no_corresponde_al_tipo(
+    client: TestClient, seed: dict
+):
+    response = client.post(
+        "/clientes",
+        json={
+            "apellido": "Socio",
+            "nombre": "Descuento inválido",
+            "cuit": _cuit(),
+            "tipo_cliente": "Socio",
+            "tipo_documento": "DNI",
+            "nro_documento": "12345678",
+            "calle_cliente": "San Martin",
+            "nro_calle_cliente": 123,
+            "id_localidad": seed["id_localidad"],
+            "descuento_porcentaje": 80,
+            "numero_socio": 900000 + uuid.uuid4().int % 99999,
+        },
+    )
+
+    if response.status_code == 201:
+        client.delete(f"/clientes/{response.json()['id_cliente']}")
+    assert response.status_code == 422
+
+
+def test_actualizar_cliente_rechaza_descuento_fuera_de_reglas(
+    client: TestClient, seed: dict
+):
+    response = client.patch(
+        f"/clientes/{seed['id_cliente']}",
+        json={"descuento_porcentaje": 80},
+    )
+
+    assert response.status_code == 422
+
+
 def test_put_cliente_reemplaza_recurso_y_subtipo(client: TestClient, seed: dict):
     payload = {
         "apellido": "Prueba",
@@ -154,7 +469,7 @@ def test_put_cliente_reemplaza_recurso_y_subtipo(client: TestClient, seed: dict)
         "calle_cliente": "San Martin",
         "nro_calle_cliente": 123,
         "id_localidad": seed["id_localidad"],
-        "descuento_porcentaje": 5,
+        "descuento_porcentaje": 20,
         "zona_cobertura": "Mendoza",
         "nro_habilitacion": "HAB-PUT",
     }
@@ -164,6 +479,7 @@ def test_put_cliente_reemplaza_recurso_y_subtipo(client: TestClient, seed: dict)
     replacement = {
         **payload,
         "apellido": "Socio",
+        "descuento_porcentaje": 10,
         "fecha_alta": created.json()["fecha_alta"],
         "tipo_cliente": "Socio",
         "numero_socio": 900000 + uuid.uuid4().int % 99999,
@@ -208,7 +524,7 @@ def test_put_cliente_rechaza_datos_de_subtipo_fuera_de_limite(
             "nro_calle_cliente": 123,
             "id_localidad": seed["id_localidad"],
             "fecha_alta": "2025-01-01",
-            "descuento_porcentaje": 5,
+            "descuento_porcentaje": 30,
             "pais_destino_principal": "X" * 51,
         },
     )

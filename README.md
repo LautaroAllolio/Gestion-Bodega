@@ -165,7 +165,23 @@ Pruebas automatizadas:
 
 Las pruebas crean `bodega_api_test` a partir de `bodega_seed`. Para usar otra
 base de prueba se configuran `TEST_DATABASE_URL`, `TEST_ADMIN_URL`,
-`TEST_DB_NAME` y `TEST_TEMPLATE_DB`. La suite actual tiene 17 pruebas.
+`TEST_DB_NAME` y `TEST_TEMPLATE_DB`. La suite actual recoge 36 casos de prueba.
+
+### Permisos de exportación
+
+En la sección **Clientes**, cada cliente Exportador tiene la acción **Permisos**
+para consultar, agregar y eliminar sus permisos. La API ofrece:
+
+| Método | Endpoint | Acción |
+|---|---|---|
+| `GET` | `/clientes/{id_cliente}/permisos` | Lista los permisos del exportador |
+| `POST` | `/clientes/{id_cliente}/permisos` | Registra un permiso con código y fechas |
+| `DELETE` | `/clientes/{id_cliente}/permisos/{id_permiso}` | Elimina un permiso |
+
+Cada permiso requiere `codigo_permiso`, `fecha_emision` y
+`fecha_vencimiento`; esta última debe ser posterior a la fecha de emisión. La
+API actualiza el descuento en la misma transacción: 35% al superar los tres
+permisos y 30% al quedar con tres o menos. No se requiere una migración nueva.
 
 ### Front en desarrollo
 

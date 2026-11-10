@@ -95,6 +95,19 @@ export interface ClienteReplacePayload extends ClientePayload {
   pais_destino_principal: string | null
 }
 
+export interface PermisoExportacion {
+  id_permiso: number
+  codigo_permiso: string
+  fecha_emision: string
+  fecha_vencimiento: string
+}
+
+export interface PermisoExportacionPayload {
+  codigo_permiso: string
+  fecha_emision: string
+  fecha_vencimiento: string
+}
+
 export interface Bodega {
   cuit: string
   razon_social: string

@@ -11,6 +11,7 @@ import { api } from '../api/endpoints'
 import { ClienteForm, type ClienteFormValues } from '../components/ClienteForm'
 import { EmptyState, ErrorBanner, Loading, SuccessBanner } from '../components/Feedback'
 import { Pagination } from '../components/Pagination'
+import { PermisosExportacionPanel } from '../components/PermisosExportacionPanel'
 import { formatDate, formatDecimal, getErrorMessage } from '../lib/format'
 import { useDebouncedValue } from '../lib/useDebouncedValue'
 
@@ -34,9 +35,13 @@ export function ClientesPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<Cliente | null>(null)
+  const [permisosClienteId, setPermisosClienteId] = useState<number | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const debouncedQ = useDebouncedValue(q, 300)
+  const clienteConPermisos = clientes?.items.find(
+    (cliente) => cliente.id_cliente === permisosClienteId,
+  ) ?? null
 
   useEffect(() => {
     let active = true
@@ -80,6 +85,7 @@ export function ClientesPage() {
   }, [debouncedQ, tipo, page, refreshKey])
 
   function abrirAlta() {
+    setPermisosClienteId(null)
     setEditing(null)
     setShowForm(true)
     setError(null)
@@ -87,6 +93,7 @@ export function ClientesPage() {
   }
 
   function abrirEdicion(cliente: Cliente) {
+    setPermisosClienteId(null)
     setEditing(cliente)
     setShowForm(true)
     setError(null)
@@ -148,6 +155,7 @@ export function ClientesPage() {
     setNotice(null)
     try {
       await api.deleteCliente(cliente.id_cliente)
+      if (permisosClienteId === cliente.id_cliente) setPermisosClienteId(null)
       setNotice('Cliente eliminado correctamente.')
       if (clientes?.items.length === 1 && page > 1) setPage((current) => current - 1)
       setRefreshKey((current) => current + 1)
@@ -192,6 +200,14 @@ export function ClientesPage() {
             setEditing(null)
           }}
           onSubmit={(values) => void guardar(values)}
+        />
+      )}
+
+      {clienteConPermisos && !showForm && (
+        <PermisosExportacionPanel
+          cliente={clienteConPermisos}
+          onClose={() => setPermisosClienteId(null)}
+          onChanged={() => setRefreshKey((current) => current + 1)}
         />
       )}
 
@@ -267,6 +283,19 @@ export function ClientesPage() {
                         >
                           Editar
                         </button>
+                        {cliente.tipo_cliente === 'Exportador' && (
+                          <button
+                            type="button"
+                            className="button small secondary"
+                            aria-controls="permissions-panel"
+                            aria-expanded={permisosClienteId === cliente.id_cliente}
+                            onClick={() => setPermisosClienteId((current) =>
+                              current === cliente.id_cliente ? null : cliente.id_cliente,
+                            )}
+                          >
+                            Permisos
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="button small danger"

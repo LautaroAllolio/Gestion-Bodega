@@ -7,6 +7,8 @@ from ..schemas import (
     ClientePage,
     ClienteReplace,
     ClienteUpdate,
+    PermisoExportacionCreate,
+    PermisoExportacionOut,
     TipoCliente,
 )
 
@@ -43,6 +45,33 @@ def actualizar_cliente(id_cliente: int, payload: ClienteUpdate):
 @router.put("/{id_cliente}", response_model=ClienteOut)
 def reemplazar_cliente(id_cliente: int, payload: ClienteReplace):
     return repository.update_cliente(id_cliente, payload.model_dump())
+
+
+@router.get("/{id_cliente}/permisos", response_model=list[PermisoExportacionOut])
+def listar_permisos_exportacion(id_cliente: int):
+    return repository.list_permisos_exportacion(id_cliente)
+
+
+@router.post(
+    "/{id_cliente}/permisos",
+    response_model=PermisoExportacionOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def crear_permiso_exportacion(
+    id_cliente: int, payload: PermisoExportacionCreate
+):
+    return repository.create_permiso_exportacion(
+        id_cliente, payload.model_dump()
+    )
+
+
+@router.delete(
+    "/{id_cliente}/permisos/{id_permiso}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def eliminar_permiso_exportacion(id_cliente: int, id_permiso: int):
+    repository.delete_permiso_exportacion(id_cliente, id_permiso)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.delete("/{id_cliente}", status_code=status.HTTP_204_NO_CONTENT)

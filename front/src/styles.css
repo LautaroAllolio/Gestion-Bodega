@@ -333,6 +333,29 @@ textarea {
   color: var(--ink);
 }
 
+.discount-output {
+  display: flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #d4c9bb;
+  border-radius: 9px;
+  background: #f1ece4;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.discount-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.discount-reset {
+  margin-left: 0;
+}
+
 input:disabled,
 select:disabled {
   background: #f1ece4;
@@ -386,6 +409,30 @@ legend {
 
 .client-form .card-heading {
   margin-bottom: 0;
+}
+
+.permission-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.permission-panel .card-heading {
+  margin-bottom: 0;
+}
+
+.permission-panel .card-heading p:last-child {
+  margin-top: 0.4rem;
+}
+
+.permission-form {
+  align-items: end;
+}
+
+.permission-note {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
 }
 
 .subtype-fields {

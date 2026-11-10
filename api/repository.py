@@ -307,10 +307,47 @@ def _insert_subtype(cur, id_cliente: int, tipo_cliente: str, data: dict[str, Any
         )
 
 
+def _descuento_exportador(total_permisos: int) -> int:
+    return 35 if total_permisos > 3 else 30
+
+
+def _validate_cliente_discount(
+    cur, id_cliente: int | None, tipo_cliente: str, descuento: Any
+) -> None:
+    descuentos_base = {"Socio": 10, "Distribuidor": 20}
+    if tipo_cliente in descuentos_base:
+        if descuento != descuentos_base[tipo_cliente]:
+            raise BusinessValidationError(
+                f"{tipo_cliente} debe tener {descuentos_base[tipo_cliente]}% de descuento"
+            )
+        return
+
+    if tipo_cliente == "Exportador" and id_cliente is None and descuento == 30:
+        return
+    if tipo_cliente == "Exportador" and id_cliente is not None:
+        cur.execute(
+            "SELECT count(*) AS total FROM PermisoExportacion WHERE id_cliente = %s",
+            (id_cliente,),
+        )
+        total_permisos = cur.fetchone()["total"]
+        descuento_esperado = _descuento_exportador(total_permisos)
+        if descuento == descuento_esperado:
+            return
+        raise BusinessValidationError(
+            f"Con {total_permisos} permisos de exportación corresponde un descuento de "
+            f"{descuento_esperado}%"
+        )
+    if tipo_cliente == "Exportador":
+        raise BusinessValidationError(
+            "Exportador debe tener 30% o, con más de tres permisos, 35% de descuento"
+        )
+    raise BusinessValidationError("Tipo de cliente inválido para el descuento")
+
+
 def _sync_subtype(cur, id_cliente: int, tipo_cliente: str, data: dict[str, Any]) -> None:
     cur.execute(
         """
-        SELECT s.numero_socio, d.zona_cobertura, d.nro_habilitacion,
+        SELECT c.tipo_cliente, s.numero_socio, d.zona_cobertura, d.nro_habilitacion,
                e.pais_destino_principal
           FROM Cliente c
           LEFT JOIN SocioClub s ON s.id_cliente = c.id_cliente
@@ -325,6 +362,24 @@ def _sync_subtype(cur, id_cliente: int, tipo_cliente: str, data: dict[str, Any])
         raise NotFoundError(f"No existe el cliente {id_cliente}")
     values = dict(current)
     values.update({key: value for key, value in data.items() if value is not None})
+
+    if current["tipo_cliente"] == tipo_cliente:
+        subtype_updates = {
+            "Socio": ("SocioClub", "numero_socio"),
+            "Distribuidor": ("Distribuidor", "zona_cobertura, nro_habilitacion"),
+            "Exportador": ("Exportador", "pais_destino_principal"),
+        }
+        table, columns = subtype_updates[tipo_cliente]
+        fields = [column.strip() for column in columns.split(",")]
+        assignments = ", ".join(f"{column} = %s" for column in fields)
+        cur.execute(
+            f"UPDATE {table} SET {assignments} WHERE id_cliente = %s",
+            (*(values[field] for field in fields), id_cliente),
+        )
+        if cur.rowcount == 0:
+            _insert_subtype(cur, id_cliente, tipo_cliente, values)
+        return
+
     cur.execute("DELETE FROM SocioClub WHERE id_cliente = %s", (id_cliente,))
     cur.execute("DELETE FROM Distribuidor WHERE id_cliente = %s", (id_cliente,))
     cur.execute("DELETE FROM Exportador WHERE id_cliente = %s", (id_cliente,))
@@ -335,6 +390,9 @@ def create_cliente(payload: dict[str, Any]) -> dict[str, Any]:
     data = dict(payload)
     with transaction() as conn:
         with conn.cursor() as cur:
+            _validate_cliente_discount(
+                cur, None, data["tipo_cliente"], data["descuento_porcentaje"]
+            )
             cur.execute(
                 """
                 INSERT INTO Cliente
@@ -393,6 +451,52 @@ def update_cliente(id_cliente: int, payload: dict[str, Any]) -> dict[str, Any]:
         return get_cliente(id_cliente)
     with transaction() as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT tipo_cliente, descuento_porcentaje
+                  FROM Cliente
+                 WHERE id_cliente = %s
+                 FOR UPDATE
+                """,
+                (id_cliente,),
+            )
+            current = cur.fetchone()
+            if current is None:
+                raise NotFoundError(f"No existe el cliente {id_cliente}")
+            if (
+                current["tipo_cliente"] == "Exportador"
+                and data.get("tipo_cliente", "Exportador") != "Exportador"
+            ):
+                cur.execute(
+                    "SELECT count(*) AS total FROM PermisoExportacion WHERE id_cliente = %s",
+                    (id_cliente,),
+                )
+                if cur.fetchone()["total"] > 0:
+                    raise BusinessValidationError(
+                        "Elimine los permisos de exportación antes de cambiar el tipo de cliente"
+                    )
+            tipo_cliente_objetivo = data.get(
+                "tipo_cliente", current["tipo_cliente"]
+            )
+            if (
+                tipo_cliente_objetivo == "Exportador"
+                and "descuento_porcentaje" not in data
+            ):
+                cur.execute(
+                    "SELECT count(*) AS total FROM PermisoExportacion WHERE id_cliente = %s",
+                    (id_cliente,),
+                )
+                total_permisos = cur.fetchone()["total"]
+                descuento_esperado = _descuento_exportador(total_permisos)
+                data["descuento_porcentaje"] = descuento_esperado
+                if current["descuento_porcentaje"] != descuento_esperado:
+                    base["descuento_porcentaje"] = descuento_esperado
+            _validate_cliente_discount(
+                cur,
+                id_cliente,
+                tipo_cliente_objetivo,
+                data.get("descuento_porcentaje", current["descuento_porcentaje"]),
+            )
             if base:
                 assignments = ", ".join(f"{column} = %s" for column in base)
                 cur.execute(
@@ -416,6 +520,104 @@ def update_cliente(id_cliente: int, payload: dict[str, Any]) -> dict[str, Any]:
                     tipo_cliente = row["tipo_cliente"]
                 _sync_subtype(cur, id_cliente, tipo_cliente, data)
     return get_cliente(id_cliente)
+
+
+def _lock_exportador(cur, id_cliente: int) -> None:
+    cur.execute(
+        "SELECT tipo_cliente FROM Cliente WHERE id_cliente = %s FOR UPDATE",
+        (id_cliente,),
+    )
+    cliente = cur.fetchone()
+    if cliente is None:
+        raise NotFoundError(f"No existe el cliente {id_cliente}")
+    if cliente["tipo_cliente"] != "Exportador":
+        raise BusinessValidationError(
+            "Los permisos solo corresponden a clientes Exportadores"
+        )
+
+
+def list_permisos_exportacion(id_cliente: int) -> list[dict[str, Any]]:
+    with transaction() as conn:
+        with conn.cursor() as cur:
+            _lock_exportador(cur, id_cliente)
+            cur.execute(
+                """
+                SELECT id_permiso, codigo_permiso, fecha_emision, fecha_vencimiento
+                  FROM PermisoExportacion
+                 WHERE id_cliente = %s
+                 ORDER BY fecha_emision, id_permiso
+                """,
+                (id_cliente,),
+            )
+            return cur.fetchall()
+
+
+def create_permiso_exportacion(
+    id_cliente: int, payload: dict[str, Any]
+) -> dict[str, Any]:
+    with transaction() as conn:
+        with conn.cursor() as cur:
+            _lock_exportador(cur, id_cliente)
+            cur.execute(
+                """
+                INSERT INTO PermisoExportacion
+                    (id_cliente, codigo_permiso, fecha_emision, fecha_vencimiento)
+                VALUES (%s, %s, %s, %s)
+                RETURNING id_permiso, codigo_permiso, fecha_emision, fecha_vencimiento
+                """,
+                (
+                    id_cliente,
+                    payload["codigo_permiso"],
+                    payload["fecha_emision"],
+                    payload["fecha_vencimiento"],
+                ),
+            )
+            permiso = cur.fetchone()
+            cur.execute(
+                "SELECT count(*) AS total FROM PermisoExportacion WHERE id_cliente = %s",
+                (id_cliente,),
+            )
+            descuento = _descuento_exportador(cur.fetchone()["total"])
+            cur.execute(
+                """
+                UPDATE Cliente
+                   SET descuento_porcentaje = %s
+                 WHERE id_cliente = %s AND descuento_porcentaje <> %s
+                """,
+                (descuento, id_cliente, descuento),
+            )
+            return permiso
+
+
+def delete_permiso_exportacion(id_cliente: int, id_permiso: int) -> None:
+    with transaction() as conn:
+        with conn.cursor() as cur:
+            _lock_exportador(cur, id_cliente)
+            cur.execute(
+                """
+                DELETE FROM PermisoExportacion
+                 WHERE id_cliente = %s AND id_permiso = %s
+                RETURNING id_permiso
+                """,
+                (id_cliente, id_permiso),
+            )
+            if cur.fetchone() is None:
+                raise NotFoundError(
+                    f"No existe el permiso {id_permiso} para el cliente {id_cliente}"
+                )
+            cur.execute(
+                "SELECT count(*) AS total FROM PermisoExportacion WHERE id_cliente = %s",
+                (id_cliente,),
+            )
+            descuento = _descuento_exportador(cur.fetchone()["total"])
+            cur.execute(
+                """
+                UPDATE Cliente
+                   SET descuento_porcentaje = %s
+                 WHERE id_cliente = %s AND descuento_porcentaje <> %s
+                """,
+                (descuento, id_cliente, descuento),
+            )
 
 
 def delete_cliente(id_cliente: int) -> None:

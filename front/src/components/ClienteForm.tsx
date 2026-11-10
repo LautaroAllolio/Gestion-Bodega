@@ -28,6 +28,11 @@ interface ClienteFormProps {
 }
 
 const tipoClientes: TipoCliente[] = ['Socio', 'Distribuidor', 'Exportador']
+const descuentosBase: Record<TipoCliente, string> = {
+  Socio: '10',
+  Distribuidor: '20',
+  Exportador: '30',
+}
 
 function esTipoCliente(value: string): value is TipoCliente {
   return tipoClientes.some((tipo) => tipo === value)
@@ -52,7 +57,7 @@ function valoresIniciales(cliente: Cliente | null): ClienteFormValues {
       nro_calle_cliente: '',
       id_localidad: '',
       fecha_alta: fechaLocalActual(),
-      descuento_porcentaje: '',
+      descuento_porcentaje: descuentosBase.Socio,
       numero_socio: '',
       zona_cobertura: '',
       nro_habilitacion: '',
@@ -93,6 +98,15 @@ export function ClienteForm({
 
   function update<K extends keyof ClienteFormValues>(key: K, value: ClienteFormValues[K]) {
     setValues((current) => ({ ...current, [key]: value }))
+  }
+
+  function changeTipoCliente(value: string) {
+    if (!esTipoCliente(value)) return
+    setValues((current) => ({
+      ...current,
+      tipo_cliente: value,
+      descuento_porcentaje: descuentosBase[value],
+    }))
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -143,9 +157,7 @@ export function ClienteForm({
           Tipo de cliente
           <select
             value={values.tipo_cliente}
-            onChange={(event) => {
-              if (esTipoCliente(event.target.value)) update('tipo_cliente', event.target.value)
-            }}
+            onChange={(event) => changeTipoCliente(event.target.value)}
           >
             {tipoClientes.map((tipo) => (
               <option key={tipo} value={tipo}>
@@ -215,18 +227,26 @@ export function ClienteForm({
             required
           />
         </label>
-        <label>
-          Descuento (%)
-          <input
-            type="number"
-            min="0"
-            max="100"
-            step="0.01"
-            value={values.descuento_porcentaje}
-            onChange={(event) => update('descuento_porcentaje', event.target.value)}
-            required
-          />
-        </label>
+        <div className="discount-field">
+          <label>
+            Descuento por tipo
+            <output className="discount-output">{values.descuento_porcentaje}%</output>
+            <small className="muted">
+              Socio 10%, distribuidor 20%, exportador 30%. La consigna U6 asigna 35% a exportadores
+              con más de tres permisos.
+            </small>
+          </label>
+          {values.tipo_cliente !== 'Exportador' &&
+            String(values.descuento_porcentaje) !== descuentosBase[values.tipo_cliente] && (
+              <button
+                type="button"
+                className="button small secondary discount-reset"
+                onClick={() => update('descuento_porcentaje', descuentosBase[values.tipo_cliente])}
+              >
+                Restablecer descuento base
+              </button>
+            )}
+        </div>
       </div>
 
       <fieldset className="subtype-fields">

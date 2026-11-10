@@ -12,6 +12,8 @@ import type {
   Localidad,
   Maridaje,
   Page,
+  PermisoExportacion,
+  PermisoExportacionPayload,
   RenglonTransferenciaPayload,
   Sala,
   TopVino,
@@ -90,6 +92,20 @@ export const api = {
   },
   deleteCliente(id: number) {
     return request<void>(`/clientes/${id}`, { method: 'DELETE' })
+  },
+  listPermisosExportacion(idCliente: number) {
+    return request<PermisoExportacion[]>(`/clientes/${idCliente}/permisos`)
+  },
+  createPermisoExportacion(idCliente: number, payload: PermisoExportacionPayload) {
+    return request<PermisoExportacion>(`/clientes/${idCliente}/permisos`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+  deletePermisoExportacion(idCliente: number, idPermiso: number) {
+    return request<void>(`/clientes/${idCliente}/permisos/${idPermiso}`, {
+      method: 'DELETE',
+    })
   },
   listBodegas() {
     return request<Bodega[]>('/catalogos/bodegas')

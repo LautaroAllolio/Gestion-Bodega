@@ -2,11 +2,34 @@ from datetime import date
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 TipoVino = Literal["Tinto", "Blanco", "Rosado", "Espumante"]
 TipoCliente = Literal["Socio", "Distribuidor", "Exportador"]
 EstadoDocumento = Literal["en_confeccion", "terminado", "procesado"]
+
+
+def _validate_descuento_tipo(
+    tipo_cliente: str,
+    descuento: Decimal,
+    *,
+    permite_excepcion_exportador: bool = False,
+) -> None:
+    descuentos_base = {"Socio": Decimal("10"), "Distribuidor": Decimal("20")}
+    if tipo_cliente in descuentos_base:
+        esperado = descuentos_base[tipo_cliente]
+        if descuento != esperado:
+            raise ValueError(f"{tipo_cliente} debe tener {esperado}% de descuento")
+        return
+
+    descuentos_exportador = {Decimal("30")}
+    if permite_excepcion_exportador:
+        descuentos_exportador.add(Decimal("35"))
+    if tipo_cliente == "Exportador" and descuento in descuentos_exportador:
+        return
+    if tipo_cliente == "Exportador":
+        raise ValueError("Exportador debe tener 30%; el 35% requiere más de tres permisos")
+    raise ValueError("Tipo de cliente inválido para el descuento")
 
 
 class CepaInput(BaseModel):
@@ -70,6 +93,7 @@ class ClienteCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_subtype(self) -> "ClienteCreate":
+        _validate_descuento_tipo(self.tipo_cliente, self.descuento_porcentaje)
         if self.tipo_cliente == "Socio" and self.numero_socio is None:
             raise ValueError("Socio requiere numero_socio")
         if self.tipo_cliente == "Distribuidor":
@@ -99,6 +123,11 @@ class ClienteReplace(BaseModel):
 
     @model_validator(mode="after")
     def validate_subtype(self) -> "ClienteReplace":
+        _validate_descuento_tipo(
+            self.tipo_cliente,
+            self.descuento_porcentaje,
+            permite_excepcion_exportador=True,
+        )
         if self.tipo_cliente == "Socio" and self.numero_socio is None:
             raise ValueError("Socio requiere numero_socio")
         if self.tipo_cliente == "Distribuidor":
@@ -125,6 +154,28 @@ class ClienteUpdate(BaseModel):
     zona_cobertura: str | None = Field(default=None, max_length=50)
     nro_habilitacion: str | None = Field(default=None, max_length=50)
     pais_destino_principal: str | None = Field(default=None, max_length=50)
+
+    @field_validator("descuento_porcentaje")
+    @classmethod
+    def validate_discount_values(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and value not in {
+            Decimal("10"),
+            Decimal("20"),
+            Decimal("30"),
+            Decimal("35"),
+        }:
+            raise ValueError("El descuento debe ser 10%, 20%, 30% o 35%")
+        return value
+
+    @model_validator(mode="after")
+    def validate_discount_type(self) -> "ClienteUpdate":
+        if self.tipo_cliente is not None and self.descuento_porcentaje is not None:
+            _validate_descuento_tipo(
+                self.tipo_cliente,
+                self.descuento_porcentaje,
+                permite_excepcion_exportador=True,
+            )
+        return self
 
 
 class RenglonVentaInput(BaseModel):
@@ -226,6 +277,32 @@ class ClientePage(BaseModel):
     page: int
     limit: int
     items: list[ClienteOut]
+
+
+class PermisoExportacionCreate(BaseModel):
+    codigo_permiso: str = Field(min_length=1, max_length=50)
+    fecha_emision: date
+    fecha_vencimiento: date
+
+    @field_validator("codigo_permiso")
+    @classmethod
+    def validate_codigo_permiso(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("El código del permiso no puede estar vacío")
+        return value.strip()
+
+    @model_validator(mode="after")
+    def validate_dates(self) -> "PermisoExportacionCreate":
+        if self.fecha_vencimiento <= self.fecha_emision:
+            raise ValueError("La fecha de vencimiento debe ser posterior a la de emisión")
+        return self
+
+
+class PermisoExportacionOut(BaseModel):
+    id_permiso: int
+    codigo_permiso: str
+    fecha_emision: date
+    fecha_vencimiento: date
 
 
 class RenglonVentaOut(BaseModel):

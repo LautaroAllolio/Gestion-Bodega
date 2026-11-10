@@ -864,7 +864,7 @@ Las siguientes observaciones reflejan el estado real del esquema y no propuestas
 4. **`Localidad` no tiene FK a `Departamento`.** La relación geográfica se usa en `Finca`; las localidades se cargan como catálogo independiente.
 5. **`Cliente.cuit` no es `UNIQUE`.** La identidad del cliente la garantiza `id_cliente`; el CUIT se valida por dominio pero no por unicidad.
 6. **La jerarquía de clientes no tiene una restricción de exclusividad.** `tipo_cliente` y la existencia del subtipo se controlan en la carga y en la aplicación, no con un `CHECK` cruzado entre tablas.
-7. **No todos los atributos tienen `CHECK` de positividad.** Por ejemplo, `Vino.presentacion_ml` no tiene `CHECK > 0` y `DetalleVenta.descuento_aplicado` no tiene un `CHECK` de rango propio; el descuento se controla en `Cliente.descuento_porcentaje`.
+7. **No todos los atributos tienen `CHECK` de positividad.** Por ejemplo, `Vino.presentacion_ml` no tiene `CHECK > 0` y `DetalleVenta.descuento_aplicado` no tiene un `CHECK` de rango propio; la API valida los descuentos de clientes según el tipo y la excepción U6 para exportadores con más de tres permisos.
 8. **El volcado versionado requiere regeneración.** `db/dump_completo.sql.gz` (10.106.395 bytes, SHA-256 `45cf6078…949ff`) se generó antes de la corrección de `fn_descuento_cliente` que introdujo el commit `f755e43`; conserva valor como artefacto de reproducibilidad, pero no se usa como evidencia primaria de la lógica actual. Después de regenerarlo hay que actualizar el tamaño y el hash en `README.md` y en la sección 5.7.
 
 ---
