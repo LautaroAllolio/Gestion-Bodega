@@ -770,3 +770,13 @@ def list_depositos() -> list[dict[str, Any]]:
          ORDER BY nombre, id_deposito
         """
     )
+
+
+def list_localidades() -> list[dict[str, Any]]:
+    return fetch_all(
+        """
+        SELECT id_localidad, nombre, provincia
+          FROM Localidad
+         ORDER BY provincia, nombre, id_localidad
+        """
+    )

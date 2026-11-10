@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/endpoints'
 import type { Page, VinoDetail, VinoListItem, TipoVino } from '../api/types'
@@ -24,10 +24,17 @@ export function CatalogoPage() {
   const [detalle, setDetalle] = useState<VinoDetail | null>(null)
   const [detalleLoading, setDetalleLoading] = useState(false)
   const [detalleError, setDetalleError] = useState<string | null>(null)
+  const detalleRef = useRef<HTMLElement>(null)
 
   const debouncedQ = useDebouncedValue(q, 300)
   const debouncedAnada = useDebouncedValue(anada, 400)
   const limit = 10
+
+  useEffect(() => {
+    if (!detalle) return
+    detalleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    detalleRef.current?.focus({ preventScroll: true })
+  }, [detalle])
 
   useEffect(() => {
     let active = true
@@ -209,7 +216,7 @@ export function CatalogoPage() {
       {detalleLoading && <Loading label="Cargando detalle..." />}
 
       {detalle && !detalleLoading && (
-        <article className="card detail-card">
+        <article ref={detalleRef} className="card detail-card" tabIndex={-1}>
           <div className="card-heading">
             <div>
               <p className="eyebrow">Detalle</p>

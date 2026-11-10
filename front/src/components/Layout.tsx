@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 const links = [
   { to: '/vinos', label: 'Catálogo' },
   { to: '/vinos/nuevo', label: 'Nuevo vino' },
+  { to: '/clientes', label: 'Clientes' },
   { to: '/ventas/nueva', label: 'Nueva venta' },
   { to: '/transferencias', label: 'Transferencias' },
   { to: '/tablero', label: 'Tablero' },

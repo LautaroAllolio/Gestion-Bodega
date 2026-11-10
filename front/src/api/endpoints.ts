@@ -3,10 +3,13 @@ import type {
   Bodega,
   Cepa,
   Cliente,
+  ClientePayload,
+  ClienteReplacePayload,
   Comprobante,
   ComprobantePayload,
   Deposito,
   EstadoDocumento,
+  Localidad,
   Maridaje,
   Page,
   RenglonTransferenciaPayload,
@@ -58,8 +61,35 @@ export const api = {
       body: JSON.stringify(payload),
     })
   },
+  replaceVino(codigo: string, payload: Omit<VinoPayload, 'codigo_vino'>) {
+    return request<VinoDetail>(`/vinos/${encodeURIComponent(codigo)}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
   listClientes(query: ClientesQuery = {}) {
     return request<Page<Cliente>>(withQuery('/clientes', query))
+  },
+  createCliente(payload: ClientePayload) {
+    return request<Cliente>('/clientes', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+  replaceCliente(id: number, payload: ClienteReplacePayload) {
+    return request<Cliente>(`/clientes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    })
+  },
+  updateCliente(id: number, payload: Partial<ClientePayload>) {
+    return request<Cliente>(`/clientes/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    })
+  },
+  deleteCliente(id: number) {
+    return request<void>(`/clientes/${id}`, { method: 'DELETE' })
   },
   listBodegas() {
     return request<Bodega[]>('/catalogos/bodegas')
@@ -75,6 +105,9 @@ export const api = {
   },
   listDepositos() {
     return request<Deposito[]>('/catalogos/depositos')
+  },
+  listLocalidades() {
+    return request<Localidad[]>('/catalogos/localidades')
   },
   cotizarComprobante(payload: ComprobantePayload) {
     return request<Comprobante>('/comprobantes/cotizar', {

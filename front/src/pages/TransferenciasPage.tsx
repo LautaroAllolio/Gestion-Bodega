@@ -45,6 +45,7 @@ export function TransferenciasPage() {
   const [detalleLoading, setDetalleLoading] = useState(false)
   const [detalleError, setDetalleError] = useState<string | null>(null)
   const [accionError, setAccionError] = useState<string | null>(null)
+  const [cambiandoEstado, setCambiandoEstado] = useState(false)
 
   const [busquedaVino, setBusquedaVino] = useState('')
   const [vinos, setVinos] = useState<VinoListItem[]>([])
@@ -156,6 +157,7 @@ export function TransferenciasPage() {
 
   async function cambiarEstado(accion: 'terminar' | 'procesar') {
     if (!seleccionada) return
+    setCambiandoEstado(true)
     setAccionError(null)
     setMensaje(null)
     try {
@@ -170,6 +172,8 @@ export function TransferenciasPage() {
       refrescar()
     } catch (err) {
       setAccionError(getErrorMessage(err))
+    } finally {
+      setCambiandoEstado(false)
     }
   }
 
@@ -400,17 +404,17 @@ export function TransferenciasPage() {
                   type="button"
                   className="button"
                   onClick={() => void cambiarEstado('terminar')}
-                  disabled={!enConfeccion}
+                  disabled={!enConfeccion || cambiandoEstado}
                 >
-                  Terminar
+                  {cambiandoEstado ? 'Actualizando...' : 'Terminar'}
                 </button>
                 <button
                   type="button"
                   className="button"
                   onClick={() => void cambiarEstado('procesar')}
-                  disabled={!terminada}
+                  disabled={!terminada || cambiandoEstado}
                 >
-                  Procesar
+                  {cambiandoEstado ? 'Actualizando...' : 'Procesar'}
                 </button>
               </div>
             </section>

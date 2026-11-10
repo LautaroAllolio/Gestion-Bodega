@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Query, Response, status
 
 from .. import repository
-from ..schemas import ClienteCreate, ClienteOut, ClientePage, ClienteUpdate, TipoCliente
+from ..schemas import (
+    ClienteCreate,
+    ClienteOut,
+    ClientePage,
+    ClienteReplace,
+    ClienteUpdate,
+    TipoCliente,
+)
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -31,6 +38,11 @@ def actualizar_cliente(id_cliente: int, payload: ClienteUpdate):
     return repository.update_cliente(
         id_cliente, payload.model_dump(exclude_unset=True)
     )
+
+
+@router.put("/{id_cliente}", response_model=ClienteOut)
+def reemplazar_cliente(id_cliente: int, payload: ClienteReplace):
+    return repository.update_cliente(id_cliente, payload.model_dump())
 
 
 @router.delete("/{id_cliente}", status_code=status.HTTP_204_NO_CONTENT)

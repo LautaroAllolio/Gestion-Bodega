@@ -144,7 +144,7 @@ export function VinoFormPage() {
     try {
       if (editando && codigo) {
         const { codigo_vino: _codigo, ...resto } = payload
-        await api.updateVino(codigo, resto)
+        await api.replaceVino(codigo, resto)
       } else {
         await api.createVino(payload)
       }

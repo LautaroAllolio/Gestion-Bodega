@@ -264,6 +264,15 @@ h3 {
   font-size: 0.82rem;
 }
 
+.button.danger {
+  background: #991b1b;
+  border-color: #991b1b;
+}
+
+.button.danger:hover:not(:disabled) {
+  background: #7f1d1d;
+}
+
 .full-width {
   width: 100%;
 }
@@ -369,6 +378,31 @@ legend {
   flex-wrap: wrap;
 }
 
+.client-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.client-form .card-heading {
+  margin-bottom: 0;
+}
+
+.subtype-fields {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.client-id {
+  display: block;
+  margin-top: 0.2rem;
+  color: var(--muted);
+}
+
+.client-name {
+  color: var(--muted);
+}
+
 .align-end {
   align-self: end;
 }
@@ -460,6 +494,12 @@ tbody tr:hover {
 
 .detail-card {
   border-left: 4px solid var(--wine);
+  scroll-margin-top: 6rem;
+}
+
+.detail-card:focus {
+  outline: 3px solid rgba(127, 29, 29, 0.35);
+  outline-offset: 3px;
 }
 
 .detail-grid {

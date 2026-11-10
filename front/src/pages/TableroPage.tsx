@@ -22,7 +22,8 @@ export function TableroPage() {
   const [topVinos, setTopVinos] = useState<TopVino[]>([])
   const [ventasSala, setVentasSala] = useState<VentaSala[]>([])
   const [reportesLoading, setReportesLoading] = useState(true)
-  const [reportesError, setReportesError] = useState<string | null>(null)
+  const [topError, setTopError] = useState<string | null>(null)
+  const [ventasError, setVentasError] = useState<string | null>(null)
 
   const [idSala, setIdSala] = useState('')
   const [sinStock, setSinStock] = useState<VinoSinStock[]>([])
@@ -32,16 +33,21 @@ export function TableroPage() {
   useEffect(() => {
     let active = true
     setReportesLoading(true)
-    setReportesError(null)
-    Promise.all([api.getTopVinos(), api.getVentasSalaTrimestre()])
-      .then(([top, ventas]) => {
-        if (!active) return
-        setTopVinos(top)
-        setVentasSala(ventas)
+    const topRequest = api.getTopVinos()
+      .then((result) => {
+        if (active) setTopVinos(result)
       })
       .catch((err) => {
-        if (active) setReportesError(getErrorMessage(err))
+        if (active) setTopError(getErrorMessage(err))
       })
+    const ventasRequest = api.getVentasSalaTrimestre()
+      .then((result) => {
+        if (active) setVentasSala(result)
+      })
+      .catch((err) => {
+        if (active) setVentasError(getErrorMessage(err))
+      })
+    Promise.all([topRequest, ventasRequest])
       .finally(() => {
         if (active) setReportesLoading(false)
       })
@@ -103,7 +109,6 @@ export function TableroPage() {
       </div>
 
       <ErrorBanner message={catalogosError} />
-      <ErrorBanner message={reportesError} />
 
       {reportesLoading ? (
         <Loading label="Cargando reportes..." />
@@ -117,7 +122,9 @@ export function TableroPage() {
               </div>
               <span className="muted">{topVinos.length} vinos</span>
             </div>
-            {datosTop.length === 0 ? (
+            {topError ? (
+              <ErrorBanner message={topError} />
+            ) : datosTop.length === 0 ? (
               <EmptyState>No hay ventas registradas para calcular el ranking.</EmptyState>
             ) : (
               <>
@@ -168,7 +175,9 @@ export function TableroPage() {
               </div>
               <span className="muted">{ventasSala.length} salas</span>
             </div>
-            {datosSalas.length === 0 ? (
+            {ventasError ? (
+              <ErrorBanner message={ventasError} />
+            ) : datosSalas.length === 0 ? (
               <EmptyState>No hay comprobantes en los últimos tres meses.</EmptyState>
             ) : (
               <>

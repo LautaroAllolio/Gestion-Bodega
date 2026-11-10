@@ -30,3 +30,8 @@ def listar_salas():
 @router.get("/depositos", response_model=list[dict[str, Any]])
 def listar_depositos():
     return repository.list_depositos()
+
+
+@router.get("/localidades", response_model=list[dict[str, Any]])
+def listar_localidades():
+    return repository.list_localidades()

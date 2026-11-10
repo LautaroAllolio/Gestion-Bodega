@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { CatalogosProvider } from './context/CatalogosContext'
 import { CatalogoPage } from './pages/CatalogoPage'
+import { ClientesPage } from './pages/ClientesPage'
 import { NuevaVentaPage } from './pages/NuevaVentaPage'
 import { TableroPage } from './pages/TableroPage'
 import { TransferenciasPage } from './pages/TransferenciasPage'
@@ -17,6 +18,7 @@ export function App() {
             <Route path="/vinos" element={<CatalogoPage />} />
             <Route path="/vinos/nuevo" element={<VinoFormPage />} />
             <Route path="/vinos/:codigo/editar" element={<VinoFormPage />} />
+            <Route path="/clientes" element={<ClientesPage />} />
             <Route path="/ventas/nueva" element={<NuevaVentaPage />} />
             <Route path="/transferencias" element={<TransferenciasPage />} />
             <Route path="/tablero" element={<TableroPage />} />

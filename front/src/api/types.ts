@@ -62,6 +62,39 @@ export interface Cliente {
   pais_destino_principal: string | null
 }
 
+export interface Localidad {
+  id_localidad: number
+  nombre: string
+  provincia: string
+}
+
+export interface ClientePayload {
+  apellido: string
+  nombre?: string | null
+  cuit: string
+  tipo_cliente: TipoCliente
+  tipo_documento: string
+  nro_documento: string
+  calle_cliente: string
+  nro_calle_cliente: number
+  id_localidad: number
+  fecha_alta?: string
+  descuento_porcentaje: number
+  numero_socio?: number | null
+  zona_cobertura?: string | null
+  nro_habilitacion?: string | null
+  pais_destino_principal?: string | null
+}
+
+export interface ClienteReplacePayload extends ClientePayload {
+  nombre: string | null
+  fecha_alta: string
+  numero_socio: number | null
+  zona_cobertura: string | null
+  nro_habilitacion: string | null
+  pais_destino_principal: string | null
+}
+
 export interface Bodega {
   cuit: string
   razon_social: string

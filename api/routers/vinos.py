@@ -1,7 +1,14 @@
 from fastapi import APIRouter, Query, Response, status
 
 from .. import repository
-from ..schemas import TipoVino, VinoCreate, VinoDetailOut, VinoPage, VinoUpdate
+from ..schemas import (
+    TipoVino,
+    VinoCreate,
+    VinoDetailOut,
+    VinoPage,
+    VinoReplace,
+    VinoUpdate,
+)
 
 router = APIRouter(prefix="/vinos", tags=["vinos"])
 
@@ -32,6 +39,11 @@ def obtener_vino(codigo_vino: str):
 @router.patch("/{codigo_vino}", response_model=VinoDetailOut)
 def actualizar_vino(codigo_vino: str, payload: VinoUpdate):
     return repository.update_vino(codigo_vino, payload.model_dump(exclude_unset=True))
+
+
+@router.put("/{codigo_vino}", response_model=VinoDetailOut)
+def reemplazar_vino(codigo_vino: str, payload: VinoReplace):
+    return repository.update_vino(codigo_vino, payload.model_dump())
 
 
 @router.delete("/{codigo_vino}", status_code=status.HTTP_204_NO_CONTENT)

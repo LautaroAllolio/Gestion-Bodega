@@ -2,6 +2,8 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+from api.db import fetch_one
+
 
 def _vino_payload(seed: dict, codigo: str) -> dict:
     return {
@@ -59,6 +61,36 @@ def test_crud_vino(client: TestClient, seed: dict):
     assert client.get(f"/vinos/{codigo}").status_code == 404
 
 
+def test_put_vino_reemplaza_recurso_completo(client: TestClient, seed: dict):
+    codigo = f"R{uuid.uuid4().hex[:12].upper()}"
+    payload = _vino_payload(seed, codigo)
+    assert client.post("/vinos", json=payload).status_code == 201
+
+    replacement = {
+        key: value for key, value in payload.items() if key != "codigo_vino"
+    }
+    replacement["nombre_comercial"] = f"Reemplazo {codigo}"
+    response = client.put(f"/vinos/{codigo}", json=replacement)
+
+    assert response.status_code == 200
+    assert response.json()["nombre_comercial"] == f"Reemplazo {codigo}"
+    assert client.patch(
+        f"/vinos/{codigo}", json={"nombre_comercial": f"Parche {codigo}"}
+    ).json()["nombre_comercial"] == f"Parche {codigo}"
+    assert client.delete(f"/vinos/{codigo}").status_code == 204
+
+
+def test_put_vino_requiere_representacion_completa(client: TestClient, seed: dict):
+    codigo = f"U{uuid.uuid4().hex[:12].upper()}"
+    assert client.post("/vinos", json=_vino_payload(seed, codigo)).status_code == 201
+
+    response = client.put(f"/vinos/{codigo}", json={"nombre_comercial": "Incompleto"})
+
+    assert response.status_code == 422
+    assert client.get(f"/vinos/{codigo}").json()["nombre_comercial"] == f"Vino {codigo}"
+    assert client.delete(f"/vinos/{codigo}").status_code == 204
+
+
 def test_precio_negativo_rechazado(client: TestClient, seed: dict):
     codigo = f"P{uuid.uuid4().hex[:12].upper()}"
     assert client.post("/vinos", json=_vino_payload(seed, codigo)).status_code == 201
@@ -111,6 +143,79 @@ def test_crud_cliente(client: TestClient, seed: dict):
     assert client.get(f"/clientes/{id_cliente}").status_code == 404
 
 
+def test_put_cliente_reemplaza_recurso_y_subtipo(client: TestClient, seed: dict):
+    payload = {
+        "apellido": "Prueba",
+        "nombre": "Distribuidor",
+        "cuit": _cuit(),
+        "tipo_cliente": "Distribuidor",
+        "tipo_documento": "DNI",
+        "nro_documento": uuid.uuid4().hex[:10],
+        "calle_cliente": "San Martin",
+        "nro_calle_cliente": 123,
+        "id_localidad": seed["id_localidad"],
+        "descuento_porcentaje": 5,
+        "zona_cobertura": "Mendoza",
+        "nro_habilitacion": "HAB-PUT",
+    }
+    created = client.post("/clientes", json=payload)
+    assert created.status_code == 201
+    id_cliente = created.json()["id_cliente"]
+    replacement = {
+        **payload,
+        "apellido": "Socio",
+        "fecha_alta": created.json()["fecha_alta"],
+        "tipo_cliente": "Socio",
+        "numero_socio": 900000 + uuid.uuid4().int % 99999,
+        "zona_cobertura": None,
+        "nro_habilitacion": None,
+        "pais_destino_principal": None,
+    }
+
+    response = client.put(f"/clientes/{id_cliente}", json=replacement)
+
+    assert response.status_code == 200
+    assert response.json()["tipo_cliente"] == "Socio"
+    assert response.json()["numero_socio"] == replacement["numero_socio"]
+    assert response.json()["zona_cobertura"] is None
+    assert client.patch(
+        f"/clientes/{id_cliente}", json={"apellido": "Parche"}
+    ).json()["apellido"] == "Parche"
+    assert client.delete(f"/clientes/{id_cliente}").status_code == 204
+
+
+def test_put_cliente_requiere_representacion_completa(client: TestClient, seed: dict):
+    response = client.put(
+        f"/clientes/{seed['id_cliente']}", json={"apellido": "Incompleto"}
+    )
+
+    assert response.status_code == 422
+
+
+def test_put_cliente_rechaza_datos_de_subtipo_fuera_de_limite(
+    client: TestClient, seed: dict
+):
+    response = client.put(
+        f"/clientes/{seed['id_cliente']}",
+        json={
+            "apellido": "Exportador",
+            "nombre": None,
+            "cuit": _cuit(),
+            "tipo_cliente": "Exportador",
+            "tipo_documento": "DNI",
+            "nro_documento": "12345678",
+            "calle_cliente": "San Martin",
+            "nro_calle_cliente": 123,
+            "id_localidad": seed["id_localidad"],
+            "fecha_alta": "2025-01-01",
+            "descuento_porcentaje": 5,
+            "pais_destino_principal": "X" * 51,
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_comprobante_valido(client: TestClient, seed: dict):
     stock = seed["stock_sala"]
     payload = {
@@ -139,6 +244,43 @@ def test_venta_sin_stock(client: TestClient, seed: dict):
     assert response.status_code == 409
     assert response.json()["sqlstate"] == "P0001"
     assert "Stock insuficiente" in response.json()["detail"]
+
+
+def test_venta_multi_renglon_fallida_revierte_cabecera_detalles_y_stock(
+    client: TestClient, seed: dict
+):
+    stock = seed["stock_sala"]
+    cantidad_antes = fetch_one(
+        "SELECT cantidad FROM StockSala WHERE id_sala = %s AND codigo_vino = %s",
+        (stock["id_sala"], stock["codigo_vino"]),
+    )["cantidad"]
+    comprobantes_antes = fetch_one(
+        "SELECT count(*) AS total FROM ComprobanteVenta"
+    )["total"]
+    detalles_antes = fetch_one("SELECT count(*) AS total FROM DetalleVenta")["total"]
+    payload = {
+        "id_cliente": seed["id_cliente"],
+        "id_sala": stock["id_sala"],
+        "renglones": [
+            {"codigo_vino": stock["codigo_vino"], "cantidad": 1},
+            {
+                "codigo_vino": stock["codigo_vino"],
+                "cantidad": stock["cantidad"] + 1000,
+            },
+        ],
+    }
+
+    response = client.post("/comprobantes", json=payload)
+
+    assert response.status_code == 409
+    assert response.json()["sqlstate"] == "P0001"
+    assert "Stock insuficiente" in response.json()["detail"]
+    assert fetch_one(
+        "SELECT cantidad FROM StockSala WHERE id_sala = %s AND codigo_vino = %s",
+        (stock["id_sala"], stock["codigo_vino"]),
+    )["cantidad"] == cantidad_antes
+    assert fetch_one("SELECT count(*) AS total FROM ComprobanteVenta")["total"] == comprobantes_antes
+    assert fetch_one("SELECT count(*) AS total FROM DetalleVenta")["total"] == detalles_antes
 
 
 def test_ingreso_estado_invalido(client: TestClient, seed: dict):
@@ -212,6 +354,7 @@ def test_catalogos(client: TestClient):
         "/catalogos/maridajes",
         "/catalogos/salas",
         "/catalogos/depositos",
+        "/catalogos/localidades",
     ]:
         response = client.get(endpoint)
         assert response.status_code == 200, endpoint
