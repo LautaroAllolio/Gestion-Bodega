@@ -35,7 +35,9 @@ El diseño persigue que las reglas de negocio vivan dentro de la base de datos y
 
 ### 1.2 Estado del desarrollo según el repositorio
 
-El repositorio contiene implementadas las Etapas 1 a 8 de la guía `docs/TPI_Bodegas_del_Atuel.md`. La Etapa 8 es un despliegue local con Docker Compose, no un despliegue en la nube. La Etapa 9 queda parcial: están la documentación y las pruebas, pero la demo en vivo y la defensa oral no forman parte del repositorio.
+El repositorio contiene implementadas las Etapas 1 a 9 de la guía `docs/TPI_Bodegas_del_Atuel.md`. La Etapa 8 es un despliegue local con Docker Compose, no un despliegue en la nube. De la Etapa 9 están la documentación, las pruebas, el guion de la demo (`docs/demo.md`) y el material de la defensa oral (`docs/defensa_oral.md`); la ejecución en vivo de ambas es actividad de la presentación.
+
+Sobre el cierre de la Etapa 8 se agregó la migración `009_descuento_exportador.sql`, que instala en la base la regla del exportador: función `fn_descuento_exportador`, trigger de validación (`P0001`) y trigger de sincronización 30/35 según la cantidad de permisos.
 
 | Etapa de la guía | Estado | Evidencia en el repositorio |
 |---|---|---|
@@ -44,12 +46,12 @@ El repositorio contiene implementadas las Etapas 1 a 8 de la guía `docs/TPI_Bod
 | 3. Carga masiva | Implementada | `db/seed/` con catálogos CSV, `load.py`, `README.md`, `benchmark_report.json` y `report_local.json`; `db/tests/verificacion_etapa3.sql`; volcado versionado |
 | 4. Índices y rendimiento | Implementada | `db/migrations/008_indices.sql`; mediciones y planes documentados en `docs/informe.md` |
 | 5. Consultas SQL | Implementada | `consultas/insert.sql`, `update.sql`, `delete.sql` y `select.sql`; consignas I1–I6, U1–U6, D1–D6 y S1–S12 |
-| 6. API REST | Implementada | `api/` con FastAPI, routers, reportes, traducción de SQLSTATE y 17 pruebas |
+| 6. API REST | Implementada | `api/` con FastAPI, routers, reportes, traducción de SQLSTATE y 36 pruebas |
 | 7. Front | Implementada | `front/` con React, Vite, TypeScript, React Router y Recharts; cinco pantallas |
 | 8. Despliegue | Parcial | `docker-compose.yml` con `db`, `db-init`, `api` y `front`; no hay despliegue en nube, backups operativos ni conexión cifrada de producción |
-| 9. Documentación y defensa | Parcial | `docs/informe.md` como bitácora por etapas, `docs/capturas/` como evidencia y este documento consolidado; la demo en vivo no está en el repositorio |
+| 9. Documentación y defensa | Implementada | `docs/informe.md` como bitácora por etapas, `docs/capturas/` como evidencia, este documento consolidado, `docs/demo.md` y `docs/defensa_oral.md` |
 
-**Verificación del alcance.** Se revisaron `db/migrations/001_esquema.sql` a `008_indices.sql`, `db/tests/`, `db/seed/`, `consultas/`, `api/`, `front/`, `tests/` y `docker-compose.yml`. La Etapa 4 tiene índices y mediciones; la Etapa 6 tiene API y pruebas; la Etapa 7 tiene front compilable y servido por Nginx; la Etapa 8 tiene un stack local reproducible. No se encontró un despliegue en nube.
+**Verificación del alcance.** Se revisaron `db/migrations/001_esquema.sql` a `009_descuento_exportador.sql`, `db/tests/`, `db/seed/`, `consultas/`, `api/`, `front/`, `tests/` y `docker-compose.yml`. La Etapa 4 tiene índices y mediciones; la Etapa 6 tiene API y pruebas; la Etapa 7 tiene front compilable y servido por Nginx; la Etapa 8 tiene un stack local reproducible. No se encontró un despliegue en nube.
 
 ### 1.3 Componentes cubiertos en este entregable
 
@@ -58,18 +60,18 @@ El repositorio contiene implementadas las Etapas 1 a 8 de la guía `docs/TPI_Bod
 | Tablas | 31 | `db/migrations/001_esquema.sql` |
 | Tipos enumerados | 1 | `estado_documento` |
 | Dominios | 1 | `cuit_dom` |
-| Funciones | 4 | `db/migrations/003_funciones.sql` |
+| Funciones | 5 | `db/migrations/003_funciones.sql` y `009_descuento_exportador.sql` |
 | Procedimientos almacenados | 2 | `db/migrations/004_procedimientos.sql` |
-| Triggers | 11 | `db/migrations/005_triggers.sql` |
+| Triggers | 13 | `db/migrations/005_triggers.sql` y `009_descuento_exportador.sql` |
 | Vistas | 3 | `db/migrations/006_vistas.sql` |
 | Roles | 3 | `db/migrations/007_roles.sql` |
 | Consultas SQL resueltas | 30 (I1–I6, U1–U6, D1–D6, S1–S12) | `consultas/` |
 | Reglas de negocio probadas | 15 (RN-01 a RN-15) | `db/tests/db_tests.sql` |
-| Controles del cargador | 15 | `db/seed/report_local.json`, `load.py` |
-| Controles independientes de carga | 22 | `db/tests/verificacion_etapa3.sql` |
+| Controles del cargador | 17 | `db/seed/report_local.json`, `load.py` |
+| Controles independientes de carga | 23 | `db/tests/verificacion_etapa3.sql` |
 | Estrategias de carga comparadas | 3 (`copy`, `executemany`, `individual`) | `db/seed/benchmark_report.json` |
 | Filas cargadas (escala 1.0) | 745.569 | `db/seed/README.md`, `report_local.json` |
-| Pruebas automatizadas de API | 17 | `tests/test_api.py` |
+| Pruebas automatizadas de API | 36 | `tests/test_api.py` |
 | Pantallas del front | 5 | `front/src/pages/` |
 | Servicios de Docker Compose | 4 (`db`, `db-init`, `api`, `front`) | `docker-compose.yml` |
 
@@ -80,7 +82,7 @@ La Etapa 3 se documenta en la sección 5 con el nivel de detalle que pide la gu�
 Quedan fuera del alcance los siguientes aspectos, que no están implementados en el repositorio:
 
 - El despliegue en la nube, la conexión cifrada, los backups operativos y la restauración en producción. El `docker-compose.yml` es un despliegue local.
-- La demo en vivo y la defensa oral.
+- La ejecución en vivo de la demo y de la defensa oral; los guiones sí están versionados en `docs/demo.md` y `docs/defensa_oral.md`.
 
 La autenticación de usuarios tampoco forma parte del front: la API se consume sin login y las credenciales se resuelven por variables de entorno del contenedor. Las observaciones sobre diferencias o límites del esquema se presentan en la sección 4.8 y reflejan el estado real del código.
 
@@ -96,18 +98,18 @@ La autenticación de usuarios tampoco forma parte del front: la API se consume s
 | `db/migrations/006_vistas.sql` | Vistas de reporte |
 | `db/migrations/007_roles.sql` | Roles y privilegios |
 | `db/tests/db_tests.sql` | Casos de prueba de RN-01 a RN-15 |
-| `db/tests/verificacion_etapa3.sql` | 22 controles posteriores a la carga masiva |
+| `db/tests/verificacion_etapa3.sql` | 23 controles posteriores a la carga masiva |
 | `consultas/insert.sql`, `update.sql`, `delete.sql`, `select.sql` | Consignas DML y DQL de la Etapa 5 |
 | `docs/capturas/` | Evidencia de configuración, carga, verificación y concurrencia |
 | `docs/informe.md` | Contexto de decisiones y bitácora por etapa |
 | `db/seed/README.md` | Catálogos, volúmenes, reproducibilidad, triggers y estrategia de carga |
 | `db/seed/load.py`, `db/seed/requirements.txt` | Generador, CLI, validaciones y dependencias de la carga |
-| `db/seed/report_local.json` | Conteos, tiempos y 15 controles de la corrida local real |
+| `db/seed/report_local.json` | Conteos, tiempos y 17 controles de la corrida local real |
 | `db/seed/benchmark_report.json` | Comparación de `copy`, `executemany` e `individual` por tabla |
 | `db/dump_completo.sql.gz` | Volcado completo de la base cargada (con salvedad de la sección 5.7) |
 | `api/` | API REST, acceso a datos, routers, reportes y pruebas de integración |
 | `front/` | SPA React, capa de API, componentes y cinco pantallas |
-| `tests/test_api.py` | 17 pruebas automatizadas de la API |
+| `tests/test_api.py` | 36 pruebas automatizadas de la API |
 | `docker-compose.yml`, `front/Dockerfile`, `front/nginx.conf` | Stack local y publicación del front |
 | `README.md` | Puesta en marcha, migraciones, carga, pruebas, front, volcado y restauración |
 
@@ -717,6 +719,7 @@ Los importes y el stock se persisten físicamente por dos razones: son valores h
 | Stock del depósito | `StockDeposito.cantidad` | `sp_procesar_ingreso` y `sp_procesar_transferencia`, con `FOR UPDATE` y `ON CONFLICT` | El stock es una magnitud operativa persistida para evitar cálculos sobre todo el historial. |
 | Stock de la sala | `StockSala.cantidad` | `trg_renglon_3_stock_y_totales`, `sp_procesar_transferencia` y `trg_renglon_2_valida_stock` | Se descuenta al vender y se incrementa al transferir; nunca puede ser negativo. |
 | Auditoría de precio | `AuditoriaPrecio` | `trg_vino_auditoria_precio` inserta precio anterior, nuevo, usuario y fecha | Conserva el historial de cambios aunque el precio actual se modifique. |
+| Descuento del exportador | `Cliente.descuento_porcentaje` | `trg_sincronizar_descuento_exportador` mantiene 30 % o 35 % según la cantidad de permisos (`fn_descuento_exportador`) | El valor no se carga a mano: la base lo deriva de los permisos vigentes (migración `009`). |
 
 **Control de consistencia:**
 
@@ -762,6 +765,7 @@ Las acciones referenciales se eligieron para proteger el historial y evitar borr
 | `fn_total_comprobante(p_nro_comprobante integer)` | RN-08 | Suma los subtotales de `DetalleVenta`; devuelve `0` si no hay renglones | `STABLE` |
 | `fn_stock_sala(p_id_sala integer, p_codigo_vino varchar)` | RN-09 | Devuelve el stock de un vino en una sala; `0` si no existe la fila | `STABLE` |
 | `fn_descuento_cliente(p_id_cliente integer)` | RN-06 | Devuelve `Cliente.descuento_porcentaje`; falla si el cliente no existe | `STABLE` |
+| `fn_descuento_exportador(p_id_cliente integer)` | RN-06 / U6 | Descuento del exportador según la cantidad de permisos: 30 % con hasta tres, 35 % con más de tres | `STABLE` |
 | `fn_antiguedad_anios(p_fecha_ingreso date)` | U2 / D3 | Años cumplidos desde la fecha de ingreso hasta `CURRENT_DATE` | `STABLE` |
 
 Ninguna función es `IMMUTABLE` porque consultan tablas o dependen de la fecha actual. No se usan funciones no determinísticas dentro de `CHECK`.
@@ -790,6 +794,8 @@ Los procedimientos no ejecutan `COMMIT` ni `ROLLBACK`: la atomicidad la controla
 | `trg_vino_auditoria_precio` | `AFTER UPDATE OF precio_venta` en `Vino` | RN-13 | Registra precio anterior, nuevo, fecha y usuario |
 | `trg_vinocepa_suma_100` | `CONSTRAINT TRIGGER` diferido en `VinoCepa` | RN-05 | Verifica al cerrar la transacción que la composición sume 100 |
 | `trg_vino_suma_100` | `CONSTRAINT TRIGGER` diferido en `Vino` | RN-05 | Verifica que un vino recién creado tenga composición válida |
+| `trg_validar_descuento_cliente` | `BEFORE INSERT OR UPDATE` en `Cliente` | RN-06 | Rechaza con `P0001` un descuento que no corresponde al tipo de cliente |
+| `trg_sincronizar_descuento_exportador` | `AFTER INSERT OR DELETE OR UPDATE OF id_cliente` en `PermisoExportacion` | RN-06 / U6 | Mantiene el descuento del exportador en 30 % o 35 % según sus permisos |
 
 #### 4.5.4 Vistas
 
@@ -805,7 +811,7 @@ Los procedimientos no ejecutan `COMMIT` ni `ROLLBACK`: la atomicidad la controla
 |---|---|---|
 | `bodega_propietario` | Administración de la base | `CONNECT`, `CREATE` y `TEMPORARY` sobre la base; `USAGE` y `CREATE` en `public`; todos los privilegios sobre tablas, secuencias, funciones y procedimientos |
 | `bodega_api` | Lectura/escritura de la API | `SELECT`, `INSERT`, `UPDATE`, `DELETE` sobre tablas; secuencias; ejecución de funciones y procedimientos |
-| `bodega_lectura` | Reportes | `SELECT` sobre tablas y ejecución de las cuatro funciones |
+| `bodega_lectura` | Reportes | `SELECT` sobre tablas y ejecución de las funciones (`fn_descuento_exportador`, de la migración `009`, se agrega con un grant condicional) |
 
 Se revocan los privilegios de `PUBLIC` sobre la base, el esquema, las tablas, las secuencias, las funciones y los procedimientos. `AuditoriaPrecio` es append-only para `bodega_api`: se revocan `UPDATE` y `DELETE`, y el `INSERT` queda disponible para el trigger de auditoría. Las contraseñas no se versionan; se asignan en el despliegue con `ALTER ROLE ... PASSWORD`.
 
@@ -864,8 +870,8 @@ Las siguientes observaciones reflejan el estado real del esquema y no propuestas
 4. **`Localidad` no tiene FK a `Departamento`.** La relación geográfica se usa en `Finca`; las localidades se cargan como catálogo independiente.
 5. **`Cliente.cuit` no es `UNIQUE`.** La identidad del cliente la garantiza `id_cliente`; el CUIT se valida por dominio pero no por unicidad.
 6. **La jerarquía de clientes no tiene una restricción de exclusividad.** `tipo_cliente` y la existencia del subtipo se controlan en la carga y en la aplicación, no con un `CHECK` cruzado entre tablas.
-7. **No todos los atributos tienen `CHECK` de positividad.** Por ejemplo, `Vino.presentacion_ml` no tiene `CHECK > 0` y `DetalleVenta.descuento_aplicado` no tiene un `CHECK` de rango propio; la API valida los descuentos de clientes según el tipo y la excepción U6 para exportadores con más de tres permisos.
-8. **El volcado versionado requiere regeneración.** `db/dump_completo.sql.gz` (10.106.395 bytes, SHA-256 `45cf6078…949ff`) se generó antes de la corrección de `fn_descuento_cliente` que introdujo el commit `f755e43`; conserva valor como artefacto de reproducibilidad, pero no se usa como evidencia primaria de la lógica actual. Después de regenerarlo hay que actualizar el tamaño y el hash en `README.md` y en la sección 5.7.
+7. **No todos los atributos tienen `CHECK` de positividad.** Por ejemplo, `Vino.presentacion_ml` no tiene `CHECK > 0` y `DetalleVenta.descuento_aplicado` no tiene un `CHECK` de rango propio; el descuento del cliente se valida en la base con `trg_validar_descuento_cliente` (`P0001`), que aplica la excepción U6 del 35 % para exportadores con más de tres permisos (migración `009`).
+8. **El volcado versionado fue regenerado.** `db/dump_completo.sql.gz` se volvió a generar después de la corrección de `fn_descuento_cliente` y de la migración `009_descuento_exportador.sql`, con `pg_dump --no-owner --no-privileges`. El tamaño y el hash vigentes están en `README.md` y en la sección 5.7.
 
 ---
 
@@ -980,7 +986,7 @@ La carga histórica no puede ejecutar los triggers operativos tal como están, p
 
 `trg_ingreso_estado` no se desactiva porque es `BEFORE UPDATE OF estado` y la carga solo hace `INSERT`. Las claves foráneas siguen activas: son triggers internos y `DISABLE TRIGGER USER` no las afecta. Los totales de `ComprobanteVenta` se calculan en Python con la misma fórmula de los triggers y funciones de la Etapa 2, porque los triggers que los recalcularían están deshabilitados durante la carga.
 
-**Riesgos y mitigaciones.** El `DISABLE TRIGGER USER` toma un lock exclusivo y la carga corre en una única transacción, en un entorno controlado y sin sesiones concurrentes. Los `DISABLE` y `ENABLE` están en la misma transacción, de modo que un error revierte ambos. Los datos se validan en Python y con 15 controles SQL antes del `COMMIT`; las FK no se desactivan y se validan fila por fila.
+**Riesgos y mitigaciones.** El `DISABLE TRIGGER USER` toma un lock exclusivo y la carga corre en una única transacción, en un entorno controlado y sin sesiones concurrentes. Los `DISABLE` y `ENABLE` están en la misma transacción, de modo que un error revierte ambos. Los datos se validan en Python y con 17 controles SQL antes del `COMMIT`; las FK no se desactivan y se validan fila por fila.
 
 ### 5.5 Tiempos y comparación de estrategias
 
@@ -992,27 +998,28 @@ El modo `--benchmark` genera un único dataset y lo inserta tres veces dentro de
 | `executemany` | 40,831 s | 42,412 s | 18.259,9 | 5,05x |
 | `individual` | 206,065 s | 207,406 s | 3.618,1 | 1,00x |
 
-La generación previa tardó 7,87 s. Los 15 controles dieron cero en las tres estrategias. `COPY` es la estrategia por defecto porque es la más rápida y la que mejor se adapta a una carga histórica masiva; `executemany` queda como alternativa por lotes. `psycopg` 3 no expone `execute_values` de `psycopg2`, por eso el lote se implementó con `executemany`.
+La generación previa tardó 7,87 s. Los controles dieron cero en las tres estrategias. `COPY` es la estrategia por defecto porque es la más rápida y la que mejor se adapta a una carga histórica masiva; `executemany` queda como alternativa por lotes. `psycopg` 3 no expone `execute_values` de `psycopg2`, por eso el lote se implementó con `executemany`.
 
-La corrida local registrada en `db/seed/report_local.json` usó la estrategia `copy`, escala `1.0`, semilla `20261101` y fecha base `2026-11-08`. La suma de los tiempos de inserción por tabla fue 21,566 s para 745.569 filas, con los 15 controles en cero y `validation_errors` vacío.
+La corrida local registrada en `db/seed/report_local.json` usó la estrategia `copy`, escala `1.0`, semilla `20261101` y fecha base `2026-11-01`. La suma de los tiempos de inserción por tabla fue 21,78 s para 745.569 filas, con los 17 controles en cero y `validation_errors` vacío.
 
 ### 5.6 Controles de integridad
 
-El cargador ejecuta 15 controles antes del `COMMIT` y falla si alguno devuelve un valor distinto de cero:
+El cargador ejecuta 17 controles antes del `COMMIT` y falla si alguno devuelve un valor distinto de cero:
 
 - Triggers de usuario deshabilitados.
 - Vinos cuya composición de cepas no suma 100.
 - Comprobantes con totales inconsistentes o sin renglones.
 - Stock negativo en depósito o sala.
+- Descuentos inconsistentes con el tipo de cliente, incluida la excepción del 35 % para exportadores con más de tres permisos (RN-06, migración `009`).
 - Renglones huérfanos de comprobante, vino, ingreso o transferencia.
 - Lotes sin parcela, clientes sin localidad, empleados sin sala, vinos sin bodega o permisos sin exportador.
 
-Además, `db/tests/verificacion_etapa3.sql` es un script independiente del cargador que ejecuta 22 controles y falla con una excepción si alguno no coincide con el valor esperado:
+Además, `db/tests/verificacion_etapa3.sql` es un script independiente del cargador que ejecuta 23 controles y falla con una excepción si alguno no coincide con el valor esperado:
 
 | Categoría | Controles | Esperado |
 |---|---:|---:|
 | Stock negativo en depósito o sala | 2 | 0 |
-| Coherencia de importes, descuentos y composición | 6 | 0 |
+| Coherencia de importes, descuentos y composición | 7 | 0 |
 | Huérfanos en relaciones principales | 11 | 0 |
 | Integridad global: FK validadas, triggers habilitados y localidades con encargado | 3 | 0 |
 
@@ -1021,7 +1028,7 @@ Además, `db/tests/verificacion_etapa3.sql` es un script independiente del carga
   -v ON_ERROR_STOP=1 -f db/tests/verificacion_etapa3.sql
 ```
 
-El script crea una vista temporal con una fila por control, compara `resultado` con `esperado`, ordena la salida y lanza `RAISE EXCEPTION` si hay diferencias. Los 22 controles dieron cero sobre la carga completa.
+El script crea una vista temporal con una fila por control, compara `resultado` con `esperado`, ordena la salida y lanza `RAISE EXCEPTION` si hay diferencias. Los 23 controles dieron cero sobre la carga completa.
 
 ### 5.7 Volcado y restauración
 
@@ -1035,14 +1042,14 @@ gzip -9 -f db/dump_completo.sql
 
 ```text
 db/dump_completo.sql.gz
-10.106.395 bytes
-SHA-256 45cf607865aa4aa331e0cca0fdc7cbcbf02e384ca3d193fea78081d3fdc949ff
+10.121.431 bytes
+SHA-256 01a8b4bf40e10cdf485af44951beeb746f7d7d8f74e215bb05f446c387807482
 31 bloques COPY · 745.569 filas
 ```
 
-La restauración se probó en una base temporal `bodega_restore`: coincidieron las 31 tablas y las 745.569 filas, y los 22 controles volvieron a dar cero. Como el volcado usa `--no-owner --no-privileges`, los roles y permisos se recrean después con `db/migrations/007_roles.sql`.
+La restauración se probó en una base temporal `bodega_restore`: coincidieron las 31 tablas y las 745.569 filas, los triggers de la migración `009` quedaron creados y los 23 controles volvieron a dar cero. Como el volcado usa `--no-owner --no-privileges`, los roles y permisos se recrean después con `db/migrations/007_roles.sql`.
 
-> **Salvedad.** El archivo versionado se generó antes de la corrección de `fn_descuento_cliente` introducida en el commit `f755e43`. Por eso conserva valor como artefacto de reproducibilidad, pero no se usa como evidencia primaria de la lógica actual: hay que regenerarlo y actualizar el tamaño y el SHA-256 en `README.md` y en esta sección.
+El volcado incluye la versión corregida de `fn_descuento_cliente` y la migración `009_descuento_exportador.sql`: función `fn_descuento_exportador`, triggers de validación y sincronización, y los 2.038 exportadores reparados (1.633 con 30 % y 405 con 35 %).
 
 ### 5.8 Reproducibilidad y fecha base
 
@@ -1192,7 +1199,7 @@ Además, `api/requirements.txt` usa `psycopg[binary,pool]` para que la imagen `p
 | Control | Resultado |
 |---|---|
 | `cd front && npm run build` | Correcto; `tsc -b` y Vite generan `dist/` (410 módulos, bundle de 667 kB) |
-| `python -m pytest -q` en el contenedor API | 17 pruebas aprobadas |
+| `python -m pytest -q` en el contenedor API | 36 pruebas aprobadas |
 | `docker compose build front api` | Ambas imágenes construidas |
 | `docker compose up -d` | `db`, `db-init`, `api` y `front`; `front` queda `healthy` |
 | `GET http://localhost:8080/api/salud` | `{"status":"ok","database":"bodega"}` |
@@ -1208,10 +1215,10 @@ Quedan dos avisos no bloqueantes: Vite informa un bundle principal de 667 kB y S
 | Etapa | Estado | Evidencia o pendiente |
 |---|---|---|
 | 4. Índices y rendimiento | Implementada | `db/migrations/008_indices.sql`, mediciones y planes en `docs/informe.md` |
-| 6. API REST | Implementada | `api/`, traducción de SQLSTATE, paginación y 17 pruebas |
+| 6. API REST | Implementada | `api/`, traducción de SQLSTATE, paginación y 36 pruebas |
 | 7. Front | Implementada | `front/`, build de producción y cinco pantallas; integración verificada por HTTP |
 | 8. Despliegue | Parcial | Stack local con `docker-compose.yml`; faltan nube, backups operativos y conexión cifrada de producción |
-| 9. Documentación y defensa | Parcial | Este informe, `docs/informe.md` y `docs/capturas/`; falta la demo en vivo |
+| 9. Documentación y defensa | Implementada | Este informe, `docs/informe.md`, `docs/capturas/`, `docs/demo.md` y `docs/defensa_oral.md` |
 
 Trabajo futuro recomendado: dividir el bundle del front con importaciones dinámicas, migrar la prueba de API a `httpx2` cuando el ecosistema lo estabilice, agregar autenticación si el alcance lo exige, definir backups y restauración para un entorno real y regenerar el volcado si se cambia la lógica de descuentos.
 
@@ -1219,7 +1226,7 @@ Trabajo futuro recomendado: dividir el bundle del front con importaciones dinám
 
 El repositorio implementa un modelo relacional normalizado hasta 3FN, con claves naturales y subrogadas justificadas, una jerarquía de clientes resuelta por supertipo y subtipos, atributos derivados persistidos y protegidos por funciones y triggers, y políticas referenciales orientadas a preservar el historial. La lógica de las Etapas 1 y 2 se complementa con la carga masiva de la Etapa 3, los índices de la Etapa 4, las consultas DML y DQL de la Etapa 5, la API de la Etapa 6 y el front de la Etapa 7.
 
-**Resultados verificables.** El esquema tiene 31 tablas, 1 tipo enumerado, 1 dominio, 4 funciones de cálculo, 2 procedimientos, 11 triggers, 3 vistas y 3 roles. Las 15 reglas de negocio tienen al menos un mecanismo en la base y un caso de prueba. La carga alcanza 745.569 filas, supera el mínimo de 100.000 y deja los 15 controles del cargador y los 22 controles independientes en cero. Las 30 consignas de la Etapa 5 se ejecutan dentro de transacciones que revierten los cambios de DML. La API tiene 17 pruebas aprobadas y el front compila y se sirve a través de Nginx con el proxy `/api/`.
+**Resultados verificables.** El esquema tiene 31 tablas, 1 tipo enumerado, 1 dominio, 5 funciones de cálculo, 2 procedimientos, 13 triggers, 3 vistas y 3 roles. Las 15 reglas de negocio tienen al menos un mecanismo en la base y un caso de prueba. La carga alcanza 745.569 filas, supera el mínimo de 100.000 y deja los 17 controles del cargador y los 23 controles independientes en cero. Las 30 consignas de la Etapa 5 se ejecutan dentro de transacciones que revierten los cambios de DML. La API tiene 36 pruebas aprobadas y el front compila y se sirve a través de Nginx con el proxy `/api/`.
 
 **Qué funcionó bien.** Concentrar las reglas en la base evita que la aplicación pueda saltearlas y permitió que el front no duplicara totales, descuentos ni stock. Los `CONSTRAINT TRIGGER` diferidos resolvieron la composición de cepas sin exigir un orden artificial de inserción. Los procedimientos transaccionales mantuvieron atómicas las operaciones de ingreso y transferencia. La cotización reutiliza la lógica real de venta y revierte la transacción, de modo que el usuario ve el total definitivo sin persistir un comprobante incompleto.
 
@@ -1238,7 +1245,7 @@ El repositorio implementa un modelo relacional normalizado hasta 3FN, con claves
 | RN-03 | FK `Empleado.id_sala` con `NOT NULL` | Sección RN-03 |
 | RN-04 | FK `Parcela.id_cepa` y `UNIQUE (id_finca, nro_parcela, campania)` en `LoteUva` | Sección RN-04 |
 | RN-05 | `trg_vinocepa_suma_100` y `trg_vino_suma_100` (constraint trigger diferido) | Sección RN-05 |
-| RN-06 | `fn_descuento_cliente`, `CHECK (descuento_porcentaje BETWEEN 0 AND 100)` y `trg_renglon_1_completar` | Sección RN-06 |
+| RN-06 | `fn_descuento_cliente`, `fn_descuento_exportador`, `trg_validar_descuento_cliente` (rechaza descuentos que no corresponden al tipo, `P0001`), `trg_sincronizar_descuento_exportador` (mantiene 30/35 según permisos), `CHECK (descuento_porcentaje BETWEEN 0 AND 100)` y `trg_renglon_1_completar` | Sección RN-06 |
 | RN-07 | FK `PermisoExportacion.id_cliente → Exportador` y `CHECK (fecha_vencimiento > fecha_emision)` | Sección RN-07 |
 | RN-08 | `fn_total_comprobante`, `trg_renglon_1_completar` y `trg_renglon_3_stock_y_totales` | Sección RN-08 |
 | RN-09 | `trg_renglon_2_valida_stock`, `trg_renglon_3_stock_y_totales` y `CHECK (cantidad >= 0)` en stock | Sección RN-09 |

@@ -184,7 +184,7 @@ Las vistas son de solo lectura y se apoyan en las tablas y funciones ya implemen
 |---|---|---|
 | `bodega_propietario` | Administración de la base | Uso y creación en `public`; todos los privilegios sobre tablas, secuencias, funciones y procedimientos |
 | `bodega_api` | Lectura/escritura de la API | `SELECT`, `INSERT`, `UPDATE` y `DELETE` sobre tablas; secuencias; ejecución de funciones y procedimientos |
-| `bodega_lectura` | Reportes | `SELECT` sobre tablas y ejecución de las cuatro funciones |
+| `bodega_lectura` | Reportes | `SELECT` sobre tablas y ejecución de las funciones (`fn_descuento_exportador`, de la migración `009`, se agrega con un grant condicional) |
 
 Se revocan los privilegios de `PUBLIC` sobre la base, el esquema, las tablas, las secuencias, las funciones y los procedimientos. Las contraseñas no se guardan en el repositorio: se asignan en el despliegue con `ALTER ROLE ... PASSWORD` a partir de variables de entorno.
 
@@ -205,7 +205,7 @@ El `INSERT` se conserva porque el trigger se ejecuta con los privilegios del usu
 | RN-03 | FK `Empleado.id_sala` | `db_tests.sql`, sección RN-03 |
 | RN-04 | `Parcela.id_cepa` + `UNIQUE (id_finca, nro_parcela, campania)` en `LoteUva` | `db_tests.sql`, sección RN-04 |
 | RN-05 | `trg_vinocepa_suma_100` y `trg_vino_suma_100` (constraint trigger diferido) | `db_tests.sql`, sección RN-05 |
-| RN-06 | `fn_descuento_cliente` + `CHECK (descuento_porcentaje BETWEEN 0 AND 100)` + `trg_renglon_1_completar` | `db_tests.sql`, sección RN-06 (incluye descuento especial de 12.50) |
+| RN-06 | `fn_descuento_cliente` + `fn_descuento_exportador` + `trg_validar_descuento_cliente` (rechaza descuentos que no corresponden al tipo, SQLSTATE `P0001`) + `trg_sincronizar_descuento_exportador` (mantiene 30/35 según permisos) + `CHECK (descuento_porcentaje BETWEEN 0 AND 100)` | `db_tests.sql`, sección RN-06 (12.50 y 150 se rechazan; los permisos sincronizan 30/35) |
 | RN-07 | FK `PermisoExportacion.id_cliente` + `CHECK (fecha_vencimiento > fecha_emision)` | `db_tests.sql`, sección RN-07 |
 | RN-08 | `fn_total_comprobante` + `trg_renglon_1_completar` + `trg_renglon_3_stock_y_totales` | `db_tests.sql`, sección RN-08 |
 | RN-09 | `trg_renglon_2_valida_stock` + `trg_renglon_3_stock_y_totales` + CHECK de stock no negativo | `db_tests.sql`, sección RN-09 |
@@ -525,7 +525,7 @@ Se agregó el modo `--benchmark`, que genera un único dataset y lo inserta con 
 | `executemany` | 40,831 s | 42,412 s | 18.259,9 | 5,05x |
 | `individual` | 206,065 s | 207,406 s | 3.618,1 | 1,00x |
 
-La generación previa tardó 7,87 s y los 15 controles dieron cero en las tres estrategias. `COPY` resultó 10,06 veces más rápido que la inserción fila por fila y 2 veces más rápido que el lote con `executemany`; por eso es la estrategia por defecto. `psycopg` 3 no expone `execute_values` de `psycopg2`, así que la alternativa por lotes se implementó con `executemany`. El detalle por tabla quedó en `db/seed/benchmark_report.json`.
+La generación previa tardó 7,87 s y los controles dieron cero en las tres estrategias. `COPY` resultó 10,06 veces más rápido que la inserción fila por fila y 2 veces más rápido que el lote con `executemany`; por eso es la estrategia por defecto. `psycopg` 3 no expone `execute_values` de `psycopg2`, así que la alternativa por lotes se implementó con `executemany`. El detalle por tabla quedó en `db/seed/benchmark_report.json`. El cargador ejecuta hoy 17 controles antes del `COMMIT`; el control `clientes_descuento_inconsistente` se agregó junto con la migración `009` para cubrir el descuento de los exportadores.
 
 ### Manejo de triggers en la carga histórica
 
@@ -544,18 +544,18 @@ Riesgos asumidos y mitigaciones:
 
 - **Reglas suspendidas:** el `ALTER TABLE ... DISABLE TRIGGER USER` toma un lock exclusivo y la carga corre en una única transacción, en un entorno controlado y sin sesiones concurrentes.
 - **Olvido de rehabilitar:** los `DISABLE` y `ENABLE` están en la misma transacción; cualquier error revierte ambos.
-- **Datos inconsistentes:** se validan invariantes en Python y se ejecutan 15 controles SQL antes del `COMMIT`.
+- **Datos inconsistentes:** se validan invariantes en Python y se ejecutan 17 controles SQL antes del `COMMIT`.
 - **Referencias:** las FK no se desactivan, por lo que se validan fila por fila durante toda la carga.
 
 ### Resultado de la prueba
 
-Sobre `bodega_seed` con las migraciones `001` a `007`, la carga completa terminó en 20,5 segundos, con 745.569 filas y los 15 controles en cero. También se verificó que todos los triggers quedaron habilitados, que las 18 localidades tienen encargado, que las 14 secuencias quedaron por encima del máximo ID y que los 600 vinos tienen composición.
+Sobre `bodega_seed` con las migraciones `001` a `009`, la carga completa terminó en 21,8 segundos de inserción (745.569 filas, generación de 8,3 s incluida en el mismo proceso), con los 17 controles en cero. También se verificó que todos los triggers quedaron habilitados, que las 18 localidades tienen encargado, que las 14 secuencias quedaron por encima del máximo ID y que los 600 vinos tienen composición.
 
-El benchmark completo se ejecutó sin alterar la base: se verificaron los conteos de `DetalleVenta`, `ComprobanteVenta`, `Vino` y `Cliente`, y que no quedaran triggers deshabilitados. La carga normal se probó además en una base temporal `bodega_smoke` con `--scale 0.01` para `copy` y `executemany`, con los 15 controles en cero.
+El benchmark completo se ejecutó sin alterar la base: se verificaron los conteos de `DetalleVenta`, `ComprobanteVenta`, `Vino` y `Cliente`, y que no quedaran triggers deshabilitados. La carga normal se probó además en una base temporal `bodega_smoke` con `--scale 0.01` para `copy` y `executemany`, con los controles en cero.
 
 ### Verificación final y volcado
 
-Se agregó `db/tests/verificacion_etapa3.sql`, un script independiente del cargador que ejecuta 22 controles y falla si alguno devuelve un valor distinto de cero:
+Se agregó `db/tests/verificacion_etapa3.sql`, un script independiente del cargador que ejecuta 23 controles y falla si alguno devuelve un valor distinto de cero:
 
 ```powershell
 & "C:\Program Files\PostgreSQL\18\bin\psql.exe" -U postgres -d bodega_seed `
@@ -565,22 +565,22 @@ Se agregó `db/tests/verificacion_etapa3.sql`, un script independiente del carga
 | Categoría | Controles | Resultado |
 |---|---:|---:|
 | Stock negativo en depósito o sala | 2 | 0 |
-| Coherencia de importes y composición | 6 | 0 |
+| Coherencia de importes, descuentos y composición | 7 | 0 |
 | Huérfanos en relaciones principales | 11 | 0 |
 | Integridad global (FK, triggers, encargados) | 3 | 0 |
 
-Los 22 controles dieron cero. El volcado se generó con `pg_dump` 18.3 en formato SQL plano, sin propietarios ni privilegios, y se comprimió con gzip:
+Los 23 controles dieron cero. El control `cliente_descuento_inconsistente` cubre el descuento según el tipo de cliente, incluida la excepción del 35 % para exportadores con más de tres permisos (RN-06). El volcado se generó con `pg_dump` 18.3 en formato SQL plano, sin propietarios ni privilegios, y se comprimió con gzip:
 
 ```text
 db/dump_completo.sql.gz
-10.105.169 bytes
-SHA-256 08d0915c4a6f890ffc845e8c0632cc34a4a9fb340b244245a7ca9f1f709230b1
+10.121.431 bytes
+SHA-256 01a8b4bf40e10cdf485af44951beeb746f7d7d8f74e215bb05f446c387807482
 31 bloques COPY · 745.569 filas
 ```
 
-Se probó la restauración en una base temporal `bodega_restore`: las 31 tablas y las 745.569 filas coincidieron con `bodega_seed`, y los 22 controles volvieron a dar cero. Luego se eliminó la base temporal. Al usar `--no-owner --no-privileges`, el volcado no depende de los roles del clúster; para recrearlos se ejecuta `db/migrations/007_roles.sql` después de restaurar.
+Se probó la restauración en una base temporal `bodega_restore`: las 31 tablas y las 745.569 filas coincidieron con `bodega_seed`, los triggers de la migración `009` quedaron creados y los 23 controles volvieron a dar cero. Luego se eliminó la base temporal. Al usar `--no-owner --no-privileges`, el volcado no depende de los roles del clúster; para recrearlos se ejecuta `db/migrations/007_roles.sql` después de restaurar.
 
-El volcado actual se regeneró con la versión corregida de `fn_descuento_cliente`, que lee `Cliente.descuento_porcentaje` en lugar de aplicar un porcentaje fijo por tipo de cliente. Se verificó la definición de la función y los 22 controles tanto en `bodega_seed` como en `bodega_restore`.
+El volcado actual se regeneró con la versión corregida de `fn_descuento_cliente`, que lee `Cliente.descuento_porcentaje` en lugar de aplicar un porcentaje fijo por tipo de cliente, y con la migración `009_descuento_exportador.sql` aplicada: función `fn_descuento_exportador`, triggers de validación y sincronización, y reparación de los 2.038 exportadores (1.633 con 30 % y 405 con 35 %). Se verificó la definición de las funciones y los 23 controles tanto en `bodega_seed` como en `bodega_restore`.
 
 # Etapa 4
 
@@ -1254,9 +1254,9 @@ Los siguientes planes representativos corresponden a las ejecuciones con tiempo 
 
 ## Alcance y método de prueba
 
-Los archivos de `consultas/` resuelven las consignas de modificación (`U1`–`U6`, `I1`–`I6`, `D1`–`D6`) y de consulta (`S1`–`S12`). Los DML se ejecutaron con `ON_ERROR_STOP=1` dentro de bloques `BEGIN ... ROLLBACK`, por lo que cada prueba partió del mismo dataset y no dejó cambios permanentes. Las pruebas se hicieron sobre `bodega_seed`, cargada desde `db/dump_completo.sql.gz`, con fecha base `2026-11-01`.
+Los archivos de `consultas/` resuelven las consignas de modificación (`U1`–`U6`, `I1`–`I6`, `D1`–`D6`) y de consulta (`S1`–`S12`). Los DML se ejecutaron con `ON_ERROR_STOP=1` dentro de bloques `BEGIN ... ROLLBACK`, por lo que cada prueba partió del mismo dataset y no dejó cambios permanentes. Las pruebas se hicieron sobre `bodega_seed`, con las migraciones `001` a `009` aplicadas y la carga generada con `db/seed/load.py`, con fecha base `2026-11-01`.
 
-La ejecución de evidencia se realizó el `2026-11-09` con PostgreSQL 18.3. Los comentarios de cabecera de `update.sql` para U2 y U3 quedaron desactualizados respecto del dump regenerado: la corrida real afectó 89 empleados y 29 vinos, respectivamente. No se modificaron los scripts; los valores de este informe son los observados en esa ejecución.
+La ejecución de evidencia se realizó el `2026-11-10` con PostgreSQL 18.3, sobre la recarga completa que incluye la migración `009` (descuentos de exportadores 30/35 según permisos). El dataset es reproducible: la semilla fija `20261101` y el orden de generación se conservaron, por lo que U2 y U3 afectaron los mismos 89 empleados y 29 vinos que la corrida anterior. Los bloques con ventanas de fechas relativas a `CURRENT_DATE` (D1, D5) y los importes acumulados (D1) se desplazan un día o reflejan el 35 % de los exportadores.
 
 Evidencias versionadas:
 
@@ -1273,7 +1273,7 @@ Evidencias versionadas:
 | U3 | Aumentar 13 % el precio de los vinos de la bodega Ponce 01 (CUIT 34463830136) | 29 | `AuditoriaPrecio` pasó de 1 a 30 filas; 0 precios inválidos. |
 | U4 | Intercambiar los días de visita Lunes y Miércoles en las salas | 4 | 4 filas modificadas; 0 días inválidos. |
 | U5 | Aplicar 15 % de descuento a los 10 vinos menos vendidos | 10 | `AuditoriaPrecio` pasó de 1 a 11 filas; 0 precios inválidos. |
-| U6 | Aplicar 35 % de descuento a exportadores con más de 3 permisos | 405 | Antes: 405 exportadores con 30 %; después: 405 con 35 %; 0 descuentos inválidos. |
+| U6 | Aplicar 35 % de descuento a exportadores con más de 3 permisos | 0 | El dataset ya llega con los 405 exportadores al 35 % (migración `009`); el `UPDATE` incluye el filtro `descuento <> 35` y es idempotente: afectó 0 filas; 0 descuentos inválidos. |
 
 Las actualizaciones masivas se resolvieron con expresiones de conjunto y CTE, sin cursores. U3 y U5 dispararon `trg_auditoria_precio`, que registra el precio anterior y el nuevo en `AuditoriaPrecio`; los controles posteriores verificaron que no se generaran precios nulos o no positivos.
 
@@ -1294,11 +1294,11 @@ I3 e I6 ejercitan los triggers de negocio: el comprobante completa precio unitar
 
 | Código | Operación | Filas | Resultado y controles |
 |---|---|---:|---|
-| D1 | Borrar comprobantes de socios con más de 5 años | 36.991 | Se eliminaron 125.818 renglones por `ON DELETE CASCADE`; comprobantes: 150.000 → 113.009; renglones: 510.382 → 384.564. |
+| D1 | Borrar comprobantes de socios con más de 5 años | 37.015 | Se eliminaron 125.897 renglones por `ON DELETE CASCADE`; comprobantes: 150.000 → 112.985; renglones: 510.382 → 384.485. |
 | D2 | Borrar cepas sin vinos asociados | 0 | Quedaron 12 cepas; las 12 están en uso, por lo que no hubo filas elegibles. |
 | D3 | Borrar empleados con menos de 2 años en la sala 4 (Luján de Cuyo) | 3 | Empleados de la sala: 6 → 3; 0 localidades quedaron con encargado eliminado. |
-| D4 | Borrar socios sin compras y con más de 5 años | 556 | Socios: 14.016 → 13.460; 0 socios quedaron sin compras. |
-| D5 | Borrar ingresos procesados con más de 1 año | 1.392 | Se eliminaron 4.937 renglones y 1.498.260 botellas por `ON DELETE CASCADE`; ingresos: 2.000 → 608; renglones: 7.125 → 2.188. |
+| D4 | Borrar socios sin compras y con más de 5 años | 557 | Socios: 14.016 → 13.459; 0 socios quedaron sin compras. |
+| D5 | Borrar ingresos procesados con más de 1 año | 1.394 | Se eliminaron 4.944 renglones y 1.500.969 botellas por `ON DELETE CASCADE`; ingresos: 2.000 → 606; renglones: 7.125 → 2.181. |
 | D6 | Borrar socios sin compras de San Rafael | 88 | Socios: 14.016 → 13.928; 0 socios de San Rafael quedaron sin compras. |
 
 Cada bloque D es independiente y termina en `ROLLBACK`; por eso D4 y D6 parten de los 14.016 socios originales. D1, D4 y D5 dependen de acciones referenciales `ON DELETE CASCADE`; D3 usa `ON DELETE SET NULL` para el encargado de localidad, y el control confirmó que ninguna localidad quedó apuntando a un empleado borrado. D2 evita la violación de FK mediante `NOT EXISTS` sobre `VinoCepa`.
@@ -1423,7 +1423,7 @@ La demostración de inyección se hace con `GET /vinos?q=' OR 1=1 --`. El valor 
 
 ### Pruebas automatizadas
 
-`tests/conftest.py` crea una base de prueba `bodega_api_test` a partir de `bodega_seed` usando `TEST_ADMIN_URL`, y configura `DATABASE_URL` antes de importar la aplicación. `tests/test_api.py` contiene 17 pruebas:
+`tests/conftest.py` crea una base de prueba `bodega_api_test` a partir de `bodega_seed` usando `TEST_ADMIN_URL`, y configura `DATABASE_URL` antes de importar la aplicación. `tests/test_api.py` contiene 36 pruebas:
 
 - salud de la API;
 - listado, filtros y búsqueda parametrizada;
@@ -1431,6 +1431,12 @@ La demostración de inyección se hace con `GET /vinos?q=' OR 1=1 --`. El valor 
 - rechazo de precio negativo (`23514`);
 - rechazo de composición de cortes distinta de 100 (`P0001`);
 - CRUD de cliente distribuidor;
+- descuento del exportador según la cantidad de permisos: 30 con tres o menos, 35 al agregar el cuarto, 30 al borrarlo (`fn_descuento_exportador`);
+- rechazo de descuento que no corresponde al tipo: 35 sin permisos, 30 con cuatro permisos, 80 en alta y en actualización (`P0001` → `409`);
+- CRUD de permisos de exportación con sincronización automática del descuento;
+- permisos solo asignables a exportadores;
+- cambio de tipo bloqueado si el exportador tiene permisos;
+- reemplazo de cliente y subtipo por `PUT`;
 - venta válida;
 - venta sin stock (`P0001`);
 - ingreso procesado que no admite nuevos renglones (`P0001`);
@@ -1443,11 +1449,13 @@ La demostración de inyección se hace con `GET /vinos?q=' OR 1=1 --`. El valor 
 - reportes S13 y S14;
 - los 12 endpoints de reportes restantes.
 
+Los rechazos del descuento se verifican por SQLSTATE (`P0001`) además del código HTTP, porque la validación vive en `trg_validar_descuento_cliente` y ya no en la API.
+
 Resultado local:
 
 ```text
 $ python -m pytest -q
-17 passed
+36 passed
 ```
 
 ### Docker Compose
@@ -1511,7 +1519,7 @@ $ cd front && npm run build
 ✓ built in 19.20s
 
 $ python -m pytest -q
-17 passed
+36 passed
 
 $ docker compose build front api
 $ docker compose up -d
@@ -1531,4 +1539,11 @@ El despliegue incluido es local y reproducible con Docker Compose: PostgreSQL, i
 
 ## Documentación y defensa
 
-La documentación está en este archivo, en `docs/Informe_Bodegas_del_Atuel.md`, en `README.md` y en `docs/capturas/`. La demo en vivo y la defensa oral no forman parte del repositorio.
+La documentación está en este archivo, en `docs/Informe_Bodegas_del_Atuel.md`, en `README.md` y en `docs/capturas/`.
+
+Sobre el cierre de la etapa 8 se agregó una mejora de datos detectada durante la prueba de la API: la migración `009_descuento_exportador.sql`, que instala la regla del exportador en la base (función `fn_descuento_exportador`, trigger de validación con `P0001` y trigger de sincronización 30/35 según permisos) y retira las validaciones duplicadas de la capa de aplicación. El README registra la secuencia completa de migraciones (`001` a `009`) y el volcado regenerado.
+
+Para la defensa se prepararon dos documentos adicionales:
+
+- `docs/demo.md`: guion de la demostración en vivo (10 a 15 minutos) sobre el despliegue local con Docker Compose, con los puntos a mostrar en cada servicio y los ejercicios de modificación en vivo.
+- `docs/defensa_oral.md`: reparto de áreas por integrante, preguntas esperadas y los tres ejercicios en vivo que corresponde a cada uno.

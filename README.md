@@ -8,7 +8,7 @@ masiva reproducible, pruebas y documentación.
 
 | Ruta | Contenido |
 |---|---|
-| `db/migrations/` | Esquema, constraints, funciones, procedimientos, triggers, vistas y roles |
+| `db/migrations/` | Esquema, constraints, funciones, procedimientos, triggers, vistas, índices, roles y regla del descuento de exportadores |
 | `db/seed/` | Catálogos CSV, generador `load.py` y documentación de la carga masiva |
 | `db/tests/` | Pruebas de las reglas RN-01 a RN-15 y verificación de la carga |
 | `api/` | API REST con FastAPI, acceso a datos, routers y reportes |
@@ -52,7 +52,13 @@ $db = "bodega_seed"
 & $psql -U postgres -d $db -v ON_ERROR_STOP=1 -f db/migrations/005_triggers.sql
 & $psql -U postgres -d $db -v ON_ERROR_STOP=1 -f db/migrations/006_vistas.sql
 & $psql -U postgres -d $db -v ON_ERROR_STOP=1 -f db/migrations/007_roles.sql
+& $psql -U postgres -d $db -v ON_ERROR_STOP=1 -f db/migrations/008_indices.sql
+& $psql -U postgres -d $db -v ON_ERROR_STOP=1 -f db/migrations/009_descuento_exportador.sql
 ```
+
+Los grants de `007` y `009` son condicionales, por lo que el orden entre ambos
+no importa: `db/init_db.py` aplica la secuencia anterior salvo `007`, que corre
+al final después de crear los roles con sus contraseñas.
 
 ### 3. Cargar los datos
 
@@ -84,7 +90,7 @@ El detalle de volúmenes, estrategias y controles está en `db/seed/README.md`.
 
 `db_tests.sql` incluye casos que deben funcionar y casos que deben fallar con un
 error esperado; los comentarios indican el SQLSTATE. `verificacion_etapa3.sql`
-ejecuta 22 controles y falla si alguno devuelve un valor distinto de cero.
+ejecuta 23 controles y falla si alguno devuelve un valor distinto de cero.
 
 ### 5. Roles
 
@@ -108,12 +114,15 @@ actuales son (hay que regenerarlo y actualizar estos valores después de cambiar
 funciones, triggers o datos):
 
 ```text
-10.105.169 bytes
-SHA-256 08d0915c4a6f890ffc845e8c0632cc34a4a9fb340b244245a7ca9f1f709230b1
+10.121.431 bytes
+SHA-256 01a8b4bf40e10cdf485af44951beeb746f7d7d8f74e215bb05f446c387807482
 ```
 
-El volcado actual incluye la versión corregida de `fn_descuento_cliente`, que lee
-`Cliente.descuento_porcentaje` en lugar de aplicar un porcentaje fijo por tipo.
+El volcado actual incluye la versión corregida de `fn_descuento_cliente` y la
+migración `009_descuento_exportador.sql` (función
+`fn_descuento_exportador`, triggers de validación y sincronización del
+descuento, y reparación de los 2.038 exportadores: 1.633 con 30% y 405 con
+35%).
 
 Para verificar el checksum:
 
@@ -137,10 +146,14 @@ sus permisos se recrean con la migración `007`.
 - `docs/TPI_Bodegas_del_Atuel.pdf`: enunciado del trabajo.
 - `docs/informe.md`: informe de las etapas, decisiones de diseño, trazabilidad
   RN-01 a RN-15 y demostración de concurrencia.
+- `docs/Informe_Bodegas_del_Atuel.md`: informe final integrado del TPI.
 - `docs/Diagrama DER/`: DER en imagen y fuente editable.
 - `docs/Diagrama Relacional/`: esquema relacional.
 - `docs/Diccionario/`: diccionario de datos.
 - `db/seed/README.md`: procedimiento detallado de la carga masiva.
+- `docs/demo.md`: guion de la demostración de 10 a 15 minutos.
+- `docs/defensa_oral.md`: distribución de áreas y ejercicios en vivo de la
+  defensa oral.
 
 ## API REST, front y Docker
 
@@ -179,9 +192,13 @@ para consultar, agregar y eliminar sus permisos. La API ofrece:
 | `DELETE` | `/clientes/{id_cliente}/permisos/{id_permiso}` | Elimina un permiso |
 
 Cada permiso requiere `codigo_permiso`, `fecha_emision` y
-`fecha_vencimiento`; esta última debe ser posterior a la fecha de emisión. La
-API actualiza el descuento en la misma transacción: 35% al superar los tres
-permisos y 30% al quedar con tres o menos. No se requiere una migración nueva.
+`fecha_vencimiento`; esta última debe ser posterior a la fecha de emisión. El
+descuento lo mantiene la base con la migración `009`: al superar los tres
+permisos, `trg_sincronizar_descuento_exportador` sube el descuento del
+cliente a 35% y al quedar en tres o menos lo devuelve a 30%. La API solo
+reenvía el valor que devuelve la base; ya no lo calcula ni lo actualiza. Un
+descuento que no corresponde al tipo de cliente se rechaza con
+`trg_validar_descuento_cliente` (SQLSTATE `P0001`, HTTP 409).
 
 ### Front en desarrollo
 
@@ -208,8 +225,8 @@ docker compose up --build
 | `db` | `localhost:55433` | PostgreSQL 16 con volumen persistente |
 | `db-init` | — | Migraciones, roles y carga inicial; termina al finalizar |
 
-El front usa `FRONT_PORT` (por defecto `8080`). `db-init` aplica las migraciones,
-incluida `008_indices.sql`, asigna las contraseñas de los roles y carga los datos
+El front usa `FRONT_PORT` (por defecto `8080`). `db-init` aplica las migraciones
+(`001` a `009`), asigna las contraseñas de los roles y carga los datos
 con `load.py`. Si la base ya tiene vinos, la carga se omite; para forzar una
 recarga se usa `FORCE_RELOAD=1`.
 
@@ -231,11 +248,19 @@ descuentos ni stock: muestra los valores devueltos por la API.
 los triggers calculen subtotal, descuento y total, y luego hace rollback. No
 persiste el comprobante, pero consume un número de secuencia.
 
+## Despliegue en la nube
+
+Pendiente (Etapa 8). El despliegue incluido es local con Docker Compose; la
+versión en la nube con backups y conexión cifrada se documentará en esta
+sección cuando se concrete. Ver `docs/demo.md` para el guion que cubre el
+reemplazo del entorno local por el remoto.
+
 ## Notas
 
 - No se guardan contraseñas ni secretos en el repositorio.
 - La API no debe recalcular totales, descuentos ni stock: debe llamar a las
   funciones y procedimientos de la base. El front tampoco los recalcula.
-- El volcado actual fue generado con PostgreSQL 18.3 y 745.569 filas.
-- El despliegue incluido es local con Docker Compose; no reemplaza un despliegue
-  en la nube con backups y conexión cifrada.
+  Desde la migración `009`, el descuento del exportador también es única
+  responsabilidad de la base (función + triggers), incluida su validación.
+- El volcado actual fue generado con PostgreSQL 18.3 y 745.569 filas
+  (20.000 clientes, 2.038 exportadores: 1.633 con 30% y 405 con 35%).
